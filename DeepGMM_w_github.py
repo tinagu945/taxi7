@@ -234,10 +234,14 @@ def main():
     val_loader = torch.utils.data.DataLoader(
         SASR_b_val, batch_size=args.batch_size, shuffle=False)
     
-#     eta = get_eta(pi_eval, pi_behavior, n_state, n_action)
-#     gt_reward = on_policy(np.array(SASR_e), args.gm)
-    eta = torch.FloatTensor(pi_eval / pi_behavior)
-    gt_reward=torch.FloatTensor(SASR_e)[:,-1].mean()
+    eta = get_eta(pi_eval, pi_behavior, n_state, n_action)
+    gt_reward = on_policy(np.array(SASR_e), args.gm)
+    print("HERE000000000 estimate using evaluation policy roll-out:", gt_reward)
+    eta = torch.FloatTensor(pi_eval / pi_behavior).cuda()
+    r_e = torch.FloatTensor([r_ for _, _, _, r_ in SASR_e]).cuda()
+    gt_reward = float(r_e.mean())
+    print("HERE estimate using evaluation policy roll-out:", gt_reward)
+
     
     
     w = StateEmbedding()
@@ -250,8 +254,8 @@ def main():
         w = w.cuda()
         f = f.cuda()
         eta = eta.cuda()
-    w_optimizer = OAdam(w.parameters(), lr=1e-3, betas=(0.5, 0.9)) 
-    f_optimizer = OAdam(f.parameters(), lr=5e-3, betas=(0.5, 0.9)) 
+    w_optimizer = OAdam(w.parameters(), lr=2e-6, betas=(0.5, 0.9)) 
+    f_optimizer = OAdam(f.parameters(), lr=1e-6, betas=(0.5, 0.9)) 
     w_optimizer_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(w_optimizer, patience=20, factor=0.5)
     f_optimizer_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(f_optimizer, patience=20, factor=0.5)
 
@@ -261,6 +265,15 @@ def main():
     gt_w = torch.Tensor(e_freq_distrib/(b_freq_distrib)).cuda()  #for numerical stability
     s=torch.linspace(0, 1999, steps=2000).cuda().long()
     
+    
+    s = torch.LongTensor([s_ for s_, _, _, _ in SASR_b_train]).cuda()
+    a = torch.LongTensor([a_ for _, a_, _, _ in SASR_b_train]).cuda()
+    r = torch.FloatTensor([r_ for _, _, _, r_ in SASR_b_train]).cuda()
+    pi_b = torch.FloatTensor(pi_behavior).cuda()
+    pi_e = torch.FloatTensor(pi_eval).cuda()
+    gt_w_estimate = float((gt_w[s] * pi_e[s, a] / pi_b[s, a] * r).mean())
+    print("HERE estimate using ground truth w:", gt_w_estimate)
+
     for epoch in range(5000):
 #         print(epoch)
         global_epoch += 1
