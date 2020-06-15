@@ -57,11 +57,11 @@ def train(loader, w, f, eta, w_optimizer, f_optimizer):
         w_optimizer.zero_grad()
         w_obj.backward(retain_graph=True)
         w_optimizer.step()
-
+        
         f_optimizer.zero_grad()
         f_obj.backward()
         f_optimizer.step()
-        torch.cuda.empty_cache()
+
         i+=1
 
 
@@ -140,8 +140,8 @@ global_epoch = 0
 def main():
     global global_epoch
     parser = argparse.ArgumentParser(description='taxi environment')
-    parser.add_argument('--nt', type=int, required=False, default=200)
-    parser.add_argument('--ts', type=int, required=False, default=400)
+    parser.add_argument('--nt', type=int, required=False, default=1)
+    parser.add_argument('--ts', type=int, required=False, default=250000)
     parser.add_argument('--gm', type=float, required=False, default=1.0)
     parser.add_argument('--print_freq', type=int, default=20)
     parser.add_argument('--batch-size', default=512, type=int)
@@ -182,12 +182,12 @@ def main():
         f = f.cuda()
         eta = eta.cuda()
 
-    w_optimizer = OAdam(w.parameters(), lr=1e-3, betas=(0.5, 0.9))
-    f_optimizer = OAdam(f.parameters(), lr=5e-3, betas=(0.5, 0.9))
-    w_optimizer_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        w_optimizer, patience=10, factor=0.5)
-    f_optimizer_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        f_optimizer, patience=10, factor=0.5)
+    # TODO: lower lr. lr depends on model
+    # Want obj stablly, non-chaotic decreasing to 0. mean_mse is cheating
+    w_optimizer = OAdam(w.parameters(), lr=1e-5, betas=(0.5, 0.9))
+    f_optimizer = OAdam(f.parameters(), lr=5e-5, betas=(0.5, 0.9))
+    w_optimizer_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, step_size=800, gamma=0.1)
+    f_optimizer_scheduler = torch.optim.lr_scheduler.StepLR(f_optimizer, step_size=800, gamma=0.1)
 
     # SASR_b, b_freq, _ = roll_out(n_state, env, pi_behavior, 1, 10000000)
     # SASR_e, e_freq, _ = roll_out(n_state, env, pi_eval, 1, 10000000)
@@ -235,9 +235,10 @@ def main():
             #             'f_model': f.state_dict()},
             #            os.path.join(args.save_file, str(epoch) + '.pth'))
         train(train_loader, w, f, eta, w_optimizer, f_optimizer)
-        torch.cuda.empty_cache()
-        w_optimizer_scheduler.step(dev_mse)
-        f_optimizer_scheduler.step(dev_mse)
+        w_optimizer_scheduler.step()
+        f_optimizer_scheduler.step()
+#         import pdb;pdb.set_trace()
+        args.val_writer.add_scalar('lr',w_optimizer_scheduler.get_lr()[0], global_epoch) 
         global_epoch += 1
 
 

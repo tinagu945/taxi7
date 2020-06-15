@@ -1,6 +1,7 @@
 import sys
 import torch
 import numpy as np
+import torch.nn as nn
 import argparse
 import os
 from torch.utils.data import Dataset, DataLoader
@@ -11,7 +12,7 @@ from environment import taxi
 from oadam import OAdam
 # from dataset import *
 from torch.utils.data import Dataset, DataLoader
-# from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 
 class SASR_Dataset(Dataset):
@@ -98,7 +99,10 @@ def validate(val_loader, w, f, gamma, eta, gt_reward, args, gt_w):
     print('pred_reward', float(pred_reward),
           'gt_reward', float(gt_reward),
           "mean_obj", float(mean_obj))
+     
     mean_mse = (pred_reward - gt_reward) ** 2
+    args.val_writer.add_scalar('mean_mse', mean_mse, global_epoch) 
+    args.val_writer.add_scalar('mean_obj', mean_obj, global_epoch) 
     return mean_obj, mean_mse
 
 
@@ -126,19 +130,41 @@ def roll_out(state_num, env, policy, num_trajectory, truncate_size):
     return SASR, frequency, mean_reward
 
 
+class StateEmbedding(nn.Module):
+    def __init__(self, num_state=2000, embedding_dim=1):
+        super(StateEmbedding, self).__init__()
+        self.embeddings = nn.Embedding(num_state, embedding_dim)
+
+    def forward(self, inputs):
+        return self.embeddings(inputs)
+
+
+class StateEmbeddingAdversary(nn.Module):
+    def __init__(self, num_state=2000, embedding_dim=1):
+        super(StateEmbeddingAdversary, self).__init__()
+        self.embeddings = nn.Embedding(num_state, embedding_dim)
+        self.c = nn.Parameter(torch.ones(2))
+
+    def forward(self, inputs):
+        return self.embeddings(inputs)
+
+    def get_coef(self):
+        return self.c
+
+
 global_epoch = 0
 
 
 def main():
     global global_epoch
     parser = argparse.ArgumentParser(description='taxi environment')
-    parser.add_argument('--nt', type=int, required=False, default=200)
-    parser.add_argument('--ts', type=int, required=False, default=400)
+    parser.add_argument('--nt', type=int, required=False, default=1)
+    parser.add_argument('--ts', type=int, required=False, default=250000)
     parser.add_argument('--gm', type=float, required=False, default=1.0)
-    # parser.add_argument('--save_file', type=str, required=True)
+    parser.add_argument('--save_file', type=str, required=True)
     parser.add_argument('--batch-size', default=1024, type=int)
     args = parser.parse_args()
-    # args.val_writer = SummaryWriter(os.path.join(args.save_file, 'val'))
+    args.val_writer = SummaryWriter(os.path.join(args.save_file, 'val'))
 
     length = 5
     env = taxi(length)
@@ -155,17 +181,14 @@ def main():
     random.seed(100)
     np.random.seed(100)
     torch.manual_seed(100)
-    SASR_b_train_raw, _, _ = roll_out(n_state, env, pi_behavior, args.nt,args.ts)
-    random.seed(200)
-    np.random.seed(200)
-    torch.manual_seed(200)                                  
-    SASR_b_val_raw, _, _ = roll_out(n_state, env, pi_behavior, args.nt, args.ts)
-    random.seed(300)
-    np.random.seed(300)
-    torch.manual_seed(300)
+    SASR_b_train_raw, _, _ = roll_out(n_state, env, pi_behavior, args.nt,
+                                      args.ts)
+    SASR_b_val_raw, _, _ = roll_out(
+        n_state, env, pi_behavior, args.nt, args.ts)
     SASR_e, _, rrr = roll_out(n_state, env, pi_eval, args.nt,
                               args.ts)  # pi_e doesn't need loader
     # rrr (reward) is -0.1495
+
     SASR_b_train = SASR_Dataset(SASR_b_train_raw)
     SASR_b_val = SASR_Dataset(SASR_b_val_raw)
 

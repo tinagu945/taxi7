@@ -29,13 +29,22 @@ def calc_game_objective(q, f, s, a, sprime, r, pi_e, gamma):
     # respectively are minimizing
     # \sum_{a=1}^m \pi_e(a | S') q(S', a)
     c = pi_e.size(1)
+#     bs = s.size(0)
     #select 2d-matrix(q,f) by row(s) and col(a) indices.
     q_of_s_a = torch.squeeze(q(s).gather(-1, a.unsqueeze(1).expand(-1, c))[:,0])
     f_of_s_a = torch.squeeze(f(s).gather(-1, a.unsqueeze(1).expand(-1, c))[:,0])
-    q_of_sprime_a = torch.squeeze(q(sprime).gather(-1, a.unsqueeze(1).expand(-1, c))[:,0])
-    E = (pi_e[sprime,a]*q_of_sprime_a).sum()
-    eq = torch.squeeze(r + gamma*E - q_of_s_a)  # all 4 vectors shape=[batch_size]
-
+#     q_of_s_a = torch.zeros(bs)
+#     f_of_s_a = torch.zeros(bs)
+#     for i in range(bs):
+#         q_of_s_a[i]=q(s[i])[a[i]]
+#         f_of_s_a[i]=f(s[i])[a[i]]
+#     import pdb;pdb.set_trace()
+#     q_of_sprime_a = torch.squeeze(q(sprime).gather(-1, a.unsqueeze(1).expand(-1, c))[:,0])
+    #bs x n_action
+    E = (pi_e[sprime]*q(sprime)).sum(dim=1)
+    #check r, f_of_s_a, q_of_s_a and E all same #of dim (1 or 2) True: all are [bs]
+    eq = torch.squeeze(r + gamma*E - q_of_s_a)  # all 4 vectors shape=[batch_size]    
+    
     vector = f_of_s_a * eq
     moment = vector.mean()
     f_reg = (vector ** 2).mean()
@@ -46,36 +55,44 @@ def on_policy(SASR, gamma):
     total_reward = 0.0
     self_normalizer = 0.0
     discounted_t = 1.0
-    for (state, action, next_state, reward) in SASR:
+    for state, action, next_state, reward in SASR:   
         total_reward += reward * discounted_t
         self_normalizer += discounted_t
         discounted_t *= gamma
     return total_reward / self_normalizer
 
 
+def on_policy_old(SASR, gamma):
+    total_reward = 0.0
+    self_normalizer = 0.0
+    for sasr in SASR:
+        discounted_t = 1.0
+        for state, action, next_state, reward in sasr:
+            total_reward += reward * discounted_t
+            self_normalizer += discounted_t
+            discounted_t *= gamma
+    return total_reward / self_normalizer
+
+#direct estimator
 def model_based(n_state, n_action, SASR, pi, gamma, nu0):
     R = np.load('gt_reward_table.npy')
     Q_table = np.zeros([n_state, n_action], dtype = np.float32)
-    T = np.zeros([n_state, n_action, n_state], dtype = np.float32)
-#     R = np.zeros([n_state, n_action], dtype = np.float32)
-#     R_count = np.zeros([n_state, n_action], dtype = np.int32)
-    for (state, action, next_state, reward) in SASR:
-        state = np.int(state)
-        action = np.int(action)
-        next_state = np.int(next_state)
-        T[state, action, next_state] += 1
-#             R[state, action] += reward
-#             R_count[state, action] += 1
-#     d0 = np.ones([n_state, 1], dtype = np.float32)
+    #TODO: use gt T: given s and a, prob(sprime)
+    #use one SASR to estimate q and w, another SASR to calc policy based on q and w
+    T= np.load('gt_T_pi19.npy') #pi_eval
+    
+#     T_est = np.zeros([n_state, n_action, n_state], dtype = np.float32)
+#     for (state, action, next_state, reward) in SASR:
+#         state = np.int(state)
+#         action = np.int(action)
+#         next_state = np.int(next_state)
+#         T_est[state, action, next_state] += 1
 
-#     t = np.where(R_count > 0)
-#     t0 = np.where(R_count == 0)
-#     R[t] = R[t]/R_count[t]
-    ###R[t0] = np.mean(R[t])
-    T = T + 1e-9	# smoothing
-    T = T/np.sum(T, axis = -1)[:,:,None]
+#     T_est = T_est + 1e-9	# smoothing
+#     T_est = T_est/np.sum(T_est, axis = -1)[:,:,None]
+#     T += 1e-9
+#     import pdb;pdb.set_trace()
 
-    ####ddd = d0/np.sum(d0)
     for i in range(100000):
         Q_table_new = np.zeros([n_state, n_action], dtype = np.float32)
         V_table = np.sum(Q_table*pi,1)
@@ -83,12 +100,87 @@ def model_based(n_state, n_action, SASR, pi, gamma, nu0):
             for action in range(n_action):
                 Q_table_new[state,action] = R[state,action]+gamma*np.sum(T[state, action, :]*V_table)
         if (((Q_table_new-Q_table)**2).mean()** 0.5)<1e-7:
-            print('Q_table converged.')
+            print(i, 'Q_table converged.')
             break
+        else:
+            print(i,(((Q_table_new-Q_table)**2).mean()** 0.5))
         Q_table = np.copy(Q_table_new)
-
     return np.sum(np.sum(Q_table*pi,1).reshape(-1)*nu0)*(1-gamma), Q_table
 
+
+def model_based_old(n_state, n_action, SASR, pi, gamma):
+    R_my = np.load('gt_reward_table.npy')
+    T_my = np.load('gt_T_pi19.npy') 
+    Q_table = np.zeros([n_state, n_action], dtype = np.float32)
+    Q_table_1 = np.zeros([n_state, n_action], dtype = np.float32)
+    Q_table_2 = np.zeros([n_state, n_action], dtype = np.float32)
+    Q_table_3 = np.zeros([n_state, n_action], dtype = np.float32)
+    T = np.zeros([n_state, n_action, n_state], dtype = np.float32)
+    R = np.zeros([n_state, n_action], dtype = np.float32)
+    R_count = np.zeros([n_state, n_action], dtype = np.int32)
+    for sasr in SASR:
+        for state, action, next_state, reward in sasr:
+            state = np.int(state)
+            action = np.int(action)
+            next_state = np.int(next_state)
+            T[state, action, next_state] += 1
+            R[state, action] += reward
+            R_count[state, action] += 1
+    d0 = np.ones([n_state, 1], dtype = np.float32)
+    
+
+    t = np.where(R_count > 0)
+    t0 = np.where(R_count == 0)
+    R[t] = R[t]/R_count[t]
+    ###R[t0] = np.mean(R[t])
+    T = T + 1e-9	# smoothing
+    T = T/np.sum(T, axis = -1)[:,:,None]
+    np.save('model_based_old_T.npy', T)
+    np.save('model_based_old_R.npy', R)
+    print('saved!')
+    ddd = np.load("emp_hist.npy").reshape(-1)
+    ####ddd = d0/np.sum(d0)
+    for i in range(800):
+        Q_table_new = np.zeros([n_state, n_action], dtype = np.float32)
+        Q_table_new_1 = np.zeros([n_state, n_action], dtype = np.float32)
+        Q_table_new_2 = np.zeros([n_state, n_action], dtype = np.float32)
+        Q_table_new_3 = np.zeros([n_state, n_action], dtype = np.float32)
+        V_table = np.sum(Q_table*pi,1)
+        V_table_1 = np.sum(Q_table_1*pi,1)
+        V_table_2 = np.sum(Q_table_2*pi,1)
+        V_table_3 = np.sum(Q_table_3*pi,1)
+        for state in range(n_state):
+            for action in range(n_action):
+                Q_table_new[state,action] = R[state,action]+gamma*np.sum(T[state, action, :]*V_table)
+                Q_table_new_1[state,action] = R_my[state,action]+gamma*np.sum(T[state, action, :]*V_table_1)
+                Q_table_new_2[state,action] = R_my[state,action]+gamma*np.sum(T_my[state, action, :]*V_table_2)
+                Q_table_new_3[state,action] = R[state,action]+gamma*np.sum(T_my[state, action, :]*V_table_3)
+  
+
+        print(i,(((Q_table_new-Q_table)**2).mean()** 0.5))
+        print((((Q_table_new_1-Q_table_1)**2).mean()** 0.5))
+        print((((Q_table_new_2-Q_table_2)**2).mean()** 0.5))
+        print((((Q_table_new_3-Q_table_3)**2).mean()** 0.5))
+        Q_table = np.copy(Q_table_new)
+        Q_table_1 = np.copy(Q_table_new_1)
+        Q_table_2 = np.copy(Q_table_new_2)
+        Q_table_3 = np.copy(Q_table_new_3)
+    
+    np.save('model_based_old_Q.npy', Q_table) 
+    np.save('model_based_old_Q1.npy', Q_table_1)
+    np.save('model_based_old_Q2.npy', Q_table_2)
+    np.save('model_based_old_Q3.npy', Q_table_3)
+    with open('find_stable.txt','a') as f:
+        f.write(str(np.sum(np.sum(Q_table*pi,1).reshape(-1)*ddd)*(1-gamma))+
+          str(np.sum(np.sum(Q_table_1*pi,1).reshape(-1)*ddd)*(1-gamma))+
+         str(np.sum(np.sum(Q_table_2*pi,1).reshape(-1)*ddd)*(1-gamma))+
+         str(np.sum(np.sum(Q_table_3*pi,1).reshape(-1)*ddd)*(1-gamma))+'\n')
+        print(np.sum(np.sum(Q_table*pi,1).reshape(-1)*ddd)*(1-gamma),\
+          np.sum(np.sum(Q_table_1*pi,1).reshape(-1)*ddd)*(1-gamma),\
+         np.sum(np.sum(Q_table_2*pi,1).reshape(-1)*ddd)*(1-gamma),\
+         np.sum(np.sum(Q_table_3*pi,1).reshape(-1)*ddd)*(1-gamma))
+#     import pdb;pdb.set_trace()
+    return np.sum(np.sum(Q_table_2*pi,1).reshape(-1)*ddd)*(1-gamma), Q_table_2
 
 
 def train(train_loader, q, f, q_optimizer, f_optimizer, pi_e, gamma):
@@ -96,13 +188,14 @@ def train(train_loader, q, f, q_optimizer, f_optimizer, pi_e, gamma):
         s, a, sprime, r = SASR
         q_obj, f_obj = calc_game_objective(q, f, s, a, sprime, r, pi_e, gamma)
         # print(w_obj, constraint)
-        q_optimizer.zero_grad()
-        q_obj.backward(retain_graph=True)
-        q_optimizer.step()
-
+        
         f_optimizer.zero_grad()
-        f_obj.backward()
+        f_obj.backward(retain_graph=True)
         f_optimizer.step()
+
+        q_optimizer.zero_grad()
+        q_obj.backward()
+        q_optimizer.step()
 
         
 
@@ -125,7 +218,8 @@ def validate(val_loader, q, f, roll_out_estimate, args, pi_e, gamma, est_model_b
     mean_mse = (pred_reward - roll_out_estimate) ** 2
 
     if global_epoch % args.print_freq == 0:
-        q_rmse = float(((q.embeddings.weight.detach().numpy() - gt_q_table) ** 2).mean() ** 0.5)
+        #weighted action prob
+        q_rmse = float(((q.embeddings.weight.detach().numpy()[s] - gt_q_table[s]) ** 2).mean() ** 0.5)
         print("epoch %d, dev objective = %f, pred reward mse = %f, q rmse %f"
               % (global_epoch, mean_obj, mean_mse, q_rmse))
         print("pred q:")
@@ -163,6 +257,30 @@ def roll_out(state_num, env, policy, num_trajectory, truncate_size):
     return SASR, frequency, mean_reward
 
 
+def roll_out_old(state_num, env, policy, num_trajectory, truncate_size):
+    SASR = []
+    total_reward = 0.0
+    frequency = np.zeros(state_num)
+    for i_trajectory in range(num_trajectory):
+        state = env.reset()
+        sasr = []
+        for i_t in range(truncate_size):
+            #env.render()
+            p_action = policy[state, :]
+            action = np.random.choice(p_action.shape[0], 1, p = p_action)[0]
+            next_state, reward = env.step(action)
+
+            sasr.append((state, action, next_state, reward))
+            frequency[state] += 1
+            total_reward += reward
+            #print env.state_decoding(state)
+            #a = input()
+
+            state = next_state
+        SASR.append(sasr)
+    return SASR, frequency, total_reward/(num_trajectory * truncate_size)
+
+
 class StateEmbedding(nn.Module):
     def __init__(self, num_state=2000, embedding_dim=1):
         super(StateEmbedding, self).__init__()
@@ -190,8 +308,8 @@ global_epoch = 0
 def main():
     global global_epoch
     parser = argparse.ArgumentParser(description='taxi environment')
-    parser.add_argument('--nt', type=int, required=False, default=1)
-    parser.add_argument('--ts', type=int, required=False, default=250000)
+    parser.add_argument('--nt', type=int, required=False, default=1000)
+    parser.add_argument('--ts', type=int, required=False, default=1000)
     parser.add_argument('--gm', type=float, required=False, default=0.98)
     parser.add_argument('--save_file', type=str, required=True)
     parser.add_argument('--batch-size', default=1024, type=int)
@@ -242,12 +360,13 @@ def main():
 #         w = w.cuda()
 #         f = f.cuda()
 #         eta = eta.cuda()
-    q_optimizer = OAdam(q.parameters(), lr=1e-3, betas=(0.5, 0.9))
-    f_optimizer = OAdam(f.parameters(), lr=5e-3, betas=(0.5, 0.9))
-    q_optimizer_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        q_optimizer, patience=40, factor=0.5)
-    f_optimizer_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        f_optimizer, patience=40, factor=0.5)
+
+    q_optimizer = OAdam(q.parameters(), lr=1e-5, betas=(0.5, 0.9))
+    f_optimizer = OAdam(f.parameters(), lr=5e-5, betas=(0.5, 0.9))
+#     q_optimizer_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+#         q_optimizer, patience=40, factor=0.5)
+#     f_optimizer_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+#         f_optimizer, patience=40, factor=0.5)
 
     # SASR_b, b_freq, _ = roll_out(n_state, env, pi_behavior, 1, 10000000)
     # SASR_e, e_freq, _ = roll_out(n_state, env, pi_eval, 1, 10000000)
@@ -263,6 +382,8 @@ def main():
 #     s = torch.LongTensor([s_ for s_, _, _, _ in SASR_b_train])
 #     a = torch.LongTensor([a_ for _, a_, _, _ in SASR_b_train])
 #     r = torch.FloatTensor([r_ for _, _, _, r_ in SASR_b_train])
+
+    #TODO: get roll_out_estimate and est_model_based very close; if stuck, try all_compare.py
     pi_b = torch.FloatTensor(pi_behavior)
     pi_e = torch.FloatTensor(pi_eval)
 
@@ -272,12 +393,15 @@ def main():
     # estimate policy value from evaluation policy roll out
 #     r_e = torch.FloatTensor([r_ for _, _, _, r_ in SASR_e])
 #     roll_out_estimate = float(r_e.mean())
-    roll_out_estimate = on_policy(SASR_e, gamma)
+    roll_out_estimate = -0.26128581 #on_policy(SASR_e, gamma)
     print("estimate using evaluation policy roll-out:", roll_out_estimate)
 
     nu0=np.load("emp_hist.npy").reshape(-1)
     est_model_based, gt_q_table = model_based(n_state, n_action, SASR_e, pi_eval, gamma, nu0)
     print("Reward estimate using model based gt_q_table: ",est_model_based) 
+#     old_est_model_based, old_gt_q_table = model_based_old(n_state, n_action, SASR_e, pi_eval, gamma)
+#     print("Reward estimate using model based old gt_q_table: ",old_est_model_based)
+#     import pdb;pdb.set_trace()
     
     for epoch in range(5000):
         # print(epoch)
@@ -287,10 +411,32 @@ def main():
             #             'f_model': f.state_dict()},
             #            os.path.join(args.save_file, str(epoch) + '.pth'))
         train(train_loader, q, f, q_optimizer, f_optimizer, pi_e, gamma)
-        q_optimizer_scheduler.step(pred_reward_mse)
-        f_optimizer_scheduler.step(pred_reward_mse)
+#         q_optimizer_scheduler.step(pred_reward_mse)
+#         f_optimizer_scheduler.step(pred_reward_mse)
         global_epoch += 1
 
 
+def find_stable():
+    length = 5
+    env = taxi(length)
+    n_state = env.n_state
+    n_action = env.n_action
+    pi_eval = np.load('taxi-policy/pi19.npy')
+    gamma=1.0
+    
+    for i in [200,400,600,800,1000]:
+        for j in range(10): 
+            SASR_e, _, rrr = roll_out_old(n_state, env, pi_eval, i, 1000)
+            roll_out_estimate = on_policy_old(SASR_e, gamma)
+            print(i, "estimate using evaluation policy roll-out:", roll_out_estimate)
+            with open('find_stable.txt','a') as f:
+                f.write(str(i)+' '+str(j)+' '+str(roll_out_estimate)+'\n')
+#             old_est_model_based, old_gt_q_table = model_based_old(n_state, n_action, SASR_e, pi_eval, gamma)
+#             print(i, "estimate using evaluation policy roll-out:", roll_out_estimate)
+#             print("Reward estimate using model based old gt_q_table: ",old_est_model_based)
+    
+    
+    
 if __name__ == '__main__':
-    main()
+#     main()
+    find_stable()
