@@ -1,10 +1,14 @@
+import itertools
+from torch.optim import Adam
 from adversarial_learning.game_objectives import q_game_objective
 from adversarial_learning.oadam import OAdam
 from adversarial_learning.tau_list_dataset import TauListDataLoader
+from benchmark_methods.discrete_q_benchmark import fit_q_tabular
+from benchmark_methods.erm_q_benchmark import train_q_network_erm
 from environments.taxi_environment import TaxiEnvironment
 from estimators.benchmark_estimators import on_policy_estimate
 from estimators.discrete_estimators import q_estimator_discrete
-from models.discrete_models import StateEmbeddingModel
+from models.discrete_models import StateEmbeddingModel, QTableModel
 from policies.discrete_policy import MixtureDiscretePolicy
 from policies.taxi_policies import load_taxi_policy
 from utils.torch_utils import load_tensor_from_npy
@@ -12,8 +16,8 @@ from debug_logging.q_logger import SimplePrintQLogger
 
 
 
-def train_q_network(train_tau_list, pi_e, num_epochs, batch_size, q, f,
-                    q_optimizer, f_optimizer, gamma, val_tau_list=None,
+def train_q_network(train_tau_list, pi_e, num_epochs, batch_size, q,
+                    f, q_optimizer, f_optimizer, gamma, val_tau_list=None,
                     val_freq=10, logger=None):
     """
     :param train_tau_list: list of trajectories logged from behavior policy
@@ -27,8 +31,8 @@ def train_q_network(train_tau_list, pi_e, num_epochs, batch_size, q, f,
     :param f_optimizer: optimizer for f network
     :param gamma: discount factor (0 < gamma <= 1)
     :param val_tau_list: (optional) list of validation trajectories for logging
-    :param val_freq: frequency of how often we perform validation logging (only
-        if logger object is provided)
+    :param val_freq: frequency (in terms of epochs) of how often we perform
+        validation logging (only if logger object is provided)
     :param logger: (optional) logger object (should be subclass of
         AbstractQLogger)
     :return: None
@@ -42,6 +46,9 @@ def train_q_network(train_tau_list, pi_e, num_epochs, batch_size, q, f,
         val_data_loader = None
 
     for epoch in range(num_epochs):
+        if logger and epoch % val_freq == 0:
+            logger.log(train_data_loader, val_data_loader, q, f, epoch)
+
         for s, a, s_prime, r in train_data_loader:
             q_obj, f_obj = q_game_objective(q, f, s, a, s_prime, r, pi_e, gamma)
 
@@ -52,9 +59,6 @@ def train_q_network(train_tau_list, pi_e, num_epochs, batch_size, q, f,
             q_optimizer.zero_grad()
             q_obj.backward()
             q_optimizer.step()
-
-        if logger and epoch % val_freq == 0:
-            logger.log(train_data_loader, val_data_loader, q, f, epoch)
 
 
 def debug():
@@ -80,11 +84,21 @@ def debug():
 
     # define networks and optimizers
     q = StateEmbeddingModel(num_s=env.num_s, num_out=env.num_a)
+    # q = fit_q_tabular(tau_list=train_tau_list, pi=pi_e, gamma=gamma)
     f = StateEmbeddingModel(num_s=env.num_s, num_out=env.num_a)
-    q_lr = 1e-3
+    q_pretrain_lr = 1e-1
+    q_pretrain_optimizer = Adam(q.parameters(), lr=q_pretrain_lr)
+    q_lr = 1e-1
     q_optimizer = OAdam(q.parameters(), lr=q_lr, betas=(0.5, 0.9))
     f_optimizer = OAdam(f.parameters(), lr=q_lr*5, betas=(0.5, 0.9))
 
+    # do ERM pre-training
+    train_q_network_erm(train_tau_list=train_tau_list, pi_e=pi_e,
+                        num_epochs=100, batch_size=1024, q=q,
+                        q_optimizer=q_pretrain_optimizer, gamma=gamma,
+                        val_tau_list=val_tau_list, val_freq=10, logger=logger)
+
+    # train using adversarial algorithm
     train_q_network(train_tau_list=train_tau_list, pi_e=pi_e, num_epochs=1000,
                     batch_size=1024, q=q, f=f, q_optimizer=q_optimizer,
                     f_optimizer=f_optimizer, gamma=gamma,

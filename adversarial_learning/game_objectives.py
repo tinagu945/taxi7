@@ -27,7 +27,7 @@ def q_game_objective(q, f, s, a, s_prime, r, pi_e, gamma):
     """
     q_of_s_a = torch.gather(q(s), dim=1, index=a.view(-1, 1)).view(-1)
     f_of_s_a = torch.gather(f(s), dim=1, index=a.view(-1, 1)).view(-1)
-    v_of_ss = (pi_e(s_prime) * q(s_prime)).sum(1)
+    v_of_ss = (pi_e(s_prime) * q(s_prime)).sum(1).detach()
     m = (r + gamma * v_of_ss - q_of_s_a) * f_of_s_a
     moment = m.mean()
     f_reg = (m ** 2).mean()

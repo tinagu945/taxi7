@@ -15,3 +15,4 @@ class QTableModel(StateEmbeddingModel):
         num_s, num_a = q_table.shape
         super(QTableModel, self).__init__(num_s=num_s, num_out=num_a)
         self.embeddings.weight.data = q_table
+
