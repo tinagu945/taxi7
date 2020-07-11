@@ -25,10 +25,18 @@ def q_game_objective(q, f, s, a, s_prime, r, pi_e, gamma):
         for q to minimize using SGD, and f_obj is the objective for f to
         minimize
     """
+    #q_of_s_a: (batch_size,)
     q_of_s_a = torch.gather(q(s), dim=1, index=a.view(-1, 1)).view(-1)
     f_of_s_a = torch.gather(f(s), dim=1, index=a.view(-1, 1)).view(-1)
     v_of_ss = (pi_e(s_prime) * q(s_prime)).sum(1)
-    m = (r + gamma * v_of_ss - q_of_s_a) * f_of_s_a
+    
+    
+    #TODO: implement QWrapper
+    #c = q.get_constraint_multipliers()
+    c=1.0
+    constraint = q_of_s_a - ((pi_e(s_prime) * r.unsqueeze(-1)).sum(1)+gamma*v_of_ss)
+      
+    m = (r + gamma * v_of_ss - q_of_s_a) * f_of_s_a +c*constraint
     moment = m.mean()
     f_reg = (m ** 2).mean()
     return moment, -moment + 0.25 * f_reg
@@ -58,7 +66,8 @@ def w_game_objective(w, f, s, a, s_prime, pi_e, pi_b, s_0, gamma):
     w_of_s_prime = w(s_prime).view(-1)
     f_of_s_prime = f(s_prime).view(-1)
     f_of_s_0 = f(s_0).view(-1)
-    pi_ratio = pi_e(s) / pi_b(s)
+
+    pi_ratio = pi_e(s) / pi_b(s)        
     eta_s_a = torch.gather(pi_ratio, dim=1, index=a.view(-1, 1)).view(-1)
 
     epsilon = gamma * w_of_s * eta_s_a - w_of_s_prime

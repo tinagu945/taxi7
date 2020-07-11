@@ -9,7 +9,7 @@ class StateEmbeddingModel(nn.Module):
     def forward(self, inputs):
         return self.embeddings(inputs)
 
-
+        
 class QTableModel(StateEmbeddingModel):
     def __init__(self, q_table):
         num_s, num_a = q_table.shape

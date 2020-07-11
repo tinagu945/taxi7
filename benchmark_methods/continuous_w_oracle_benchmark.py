@@ -1,7 +1,7 @@
 import torch
 
-
-def calculate_tabular_w_oracle(env, pi_b, pi_e, gamma, num_s,
+# July 11: No diff from discrete oracle
+def calculate_continuous_w_oracle(env, pi_b, pi_e, gamma, num_s,
                                tau_len=1000000, burn_in=100000):
     """
     :param env: environment (should be AbstractEnvironment)
@@ -26,4 +26,3 @@ def calculate_tabular_w_oracle(env, pi_b, pi_e, gamma, num_s,
         freq_b = float((s_b == i).sum())
         w[i] = freq_e / freq_b if freq_b > 0 else 1.0
     return w
-

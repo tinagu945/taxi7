@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0,'./')
+
 from adversarial_learning.game_objectives import q_game_objective
 from adversarial_learning.oadam import OAdam
 from adversarial_learning.tau_list_dataset import TauListDataLoader
@@ -67,24 +70,25 @@ def debug():
     pi_b = MixtureDiscretePolicy(pi_1=pi_e, pi_2=pi_other, pi_1_weight=alpha)
 
     # set up logger
+    print('here!-1-1-')
     init_state_dist_path = "taxi_data/init_state_dist.npy"
     init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
     logger = SimplePrintQLogger(env=env, pi_e=pi_e, gamma=gamma,
                                 init_state_dist=init_state_dist)
-
+    print('here!00000')
     # generate train and val data
     train_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=200000,
                                            burn_in=100000)
     val_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=200000,
                                          burn_in=100000)
-
+    print('here!1111')
     # define networks and optimizers
     q = StateEmbeddingModel(num_s=env.num_s, num_out=env.num_a)
     f = StateEmbeddingModel(num_s=env.num_s, num_out=env.num_a)
     q_lr = 1e-3
     q_optimizer = OAdam(q.parameters(), lr=q_lr, betas=(0.5, 0.9))
     f_optimizer = OAdam(f.parameters(), lr=q_lr*5, betas=(0.5, 0.9))
-
+    print('here!')
     train_q_network(train_tau_list=train_tau_list, pi_e=pi_e, num_epochs=1000,
                     batch_size=1024, q=q, f=f, q_optimizer=q_optimizer,
                     f_optimizer=f_optimizer, gamma=gamma,

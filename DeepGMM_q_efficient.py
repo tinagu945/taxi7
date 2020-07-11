@@ -246,6 +246,9 @@ def roll_out(state_num, env, policy, num_trajectory, truncate_size):
             # action = np.random.choice(p_action.shape[0], 1, p=p_action)[0]
             action = np.random.choice(list(range(p_action.shape[0])), p=p_action)
             next_state, reward = env.step(action)
+#             next_state, reward, done, _ = env.step(action)
+#             if done:
+#                 state = env.reset()
 
             SASR.append((state, action, next_state, reward))
             frequency[state] += 1
