@@ -14,9 +14,4 @@ class QTableModel(StateEmbeddingModel):
     def __init__(self, q_table):
         num_s, num_a = q_table.shape
         super(QTableModel, self).__init__(num_s=num_s, num_out=num_a)
-<<<<<<< HEAD
         self.embeddings.weight.data = q_table
-=======
-        self.embeddings.weight.data = q_table
-
->>>>>>> efd75c6f64c70497b347e12d46f7a45e910933b7

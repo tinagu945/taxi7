@@ -1,11 +1,7 @@
-<<<<<<< HEAD
 import sys
 sys.path.insert(0,'./')
-
-=======
 import itertools
 from torch.optim import Adam
->>>>>>> efd75c6f64c70497b347e12d46f7a45e910933b7
 from adversarial_learning.game_objectives import q_game_objective
 from adversarial_learning.oadam import OAdam
 from adversarial_learning.tau_list_dataset import TauListDataLoader
