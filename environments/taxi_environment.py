@@ -1,10 +1,7 @@
 import numpy as np
 import torch
 from environments.abstract_environment import AbstractEnvironment
-from models.discrete_models import StateEmbeddingModel
 from policies.debug_policies import RandomPolicy
-from policies.discrete_policy import MixtureDiscretePolicy
-from policies.taxi_policies import load_taxi_policy
 
 DOWN_ACTION = 0
 RIGHT_ACTION = 1
@@ -56,8 +53,45 @@ class TaxiEnvironment(AbstractEnvironment):
                 state_tensor[x, y, 1] = 1.0
         if self.taxi_status < 4:
             x, y = self.possible_passenger_loc[self.taxi_status]
-            state_tensor[x, y, 1] = 1.0
+            state_tensor[x, y, 2] = 1.0
         return state_tensor
+
+    def decode_state_tensor(self, s):
+        """
+        :param s: either single state of shape (grid_length, grid_length, 3),
+            or batch of states of size (b, grid_length, grid_length, 3)
+        :return: either integer representing decoding of single state, or
+            LongTensor of integers representing decoding of state batch
+        """
+        if len(s.shape) == 4:
+            is_batch = True
+        elif len(s.shape) == 3:
+            is_batch = False
+        else:
+            raise ValueError("Invalid shape for state input:", s.shape)
+        s = s.long()
+        c = torch.LongTensor(range(self.grid_length))
+        if is_batch:
+            batch_size = s.shape[0]
+            taxi_x = torch.einsum("bij,i->b", s[:, :, :, 0], c)
+            taxi_y = torch.einsum("bij,j->b", s[:, :, :, 0], c)
+            passenger_status = torch.zeros(batch_size).long()
+            taxi_status = torch.ones(batch_size).long() * 4
+            for i in range(4):
+                x, y = self.possible_passenger_loc[i]
+                passenger_status.add_(s[:, x, y, 1] * (1 << i))
+                taxi_status.add_(s[:, x, y, 2] * (i - 4))
+        else:
+            taxi_x = int(torch.einsum("ij,i->", s[:, :, 0], c))
+            taxi_y = int(torch.einsum("ij,j->", s[:, :, 0], c))
+            passenger_status = 0
+            taxi_status = 4
+            for i in range(4):
+                x, y = self.possible_passenger_loc[i]
+                passenger_status += (int(s[x, y, 1]) * (1 << i))
+                taxi_status += int(s[x, y, 2]) * (i - 4)
+        return (taxi_status + 5 * (passenger_status +
+                                   (taxi_x * self.grid_length + taxi_y) * 16))
 
     def state_decoding(self, state):
         length = self.grid_length
@@ -149,12 +183,17 @@ class TaxiEnvironment(AbstractEnvironment):
 def debug():
     env = TaxiEnvironment(discrete_state=False)
     pi = RandomPolicy(num_a=env.num_a, state_rank=3)
-    tau_list = env.generate_roll_out(pi=pi, num_tau=1, tau_len=4)
+    tau_list = env.generate_roll_out(pi=pi, num_tau=1, tau_len=10)
     s, a, s_prime, r = tau_list[0]
     print(s.shape)
     print(a.shape)
     print(s_prime.shape)
     print(r.shape)
+    print("decoded states:")
+    print(env.decode_state_tensor(s_prime))
+    print("decoded states one by one:")
+    for s_ in s_prime:
+        print(env.decode_state_tensor(s_))
 
 
 
