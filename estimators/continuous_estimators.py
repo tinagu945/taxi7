@@ -3,7 +3,7 @@ from adversarial_learning.tau_list_dataset import TauListDataLoader
 from policies.continuous_policy import ContinuousPolicy
 
 #July 11: No diff from discrete
-def q_estimator_discrete(pi_e, gamma, q, init_state_dist):
+def q_estimator_continuous(pi_e, gamma, q, init_state_dist):
     """
     q-based estimator for policy value in discrete settings
 
@@ -26,7 +26,7 @@ def q_estimator_discrete(pi_e, gamma, q, init_state_dist):
     return float((1 - gamma) * mean_v)
 
 
-def w_estimator_discrete(tau_list_data_loader, pi_e, pi_b, w):
+def w_estimator_continuous(tau_list_data_loader, pi_e, pi_b, w):
     """
     w-based estimator for policy value in discrete settings
 

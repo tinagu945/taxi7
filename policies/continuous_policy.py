@@ -21,9 +21,7 @@ class ContinuousPolicy(object):
         self.temp = temp
 
     def __call__(self, s):
-        if isinstance(s, torch.Tensor):
-            s = s.view(-1)
-        return (self.policy_probs(s)/temp).softmax(-1)
+        return (self.q_network(s)/self.temp).softmax(-1)
 
     def get_q_network(self):
         return self.q_network
@@ -52,11 +50,9 @@ class MixtureContinuousPolicy(object):
         self.temp = pi_1.temp
 
     def __call__(self, s):
-        if isinstance(s, torch.Tensor):
-            s = s.view(-1)
         # For continuous policies, they can only be mixed as output. 
         # And the networks' outputs need to be normalized
-        return self.alpha*((self.q_network_1(s)/self.temp).softmax(-1))+
+        return self.alpha*((self.q_network_1(s)/self.temp).softmax(-1))+\
     (1-self.alpha)*((self.q_network_2(s)/self.temp).softmax(-1))
     
     def get_q_network(self):

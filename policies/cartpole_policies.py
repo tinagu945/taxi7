@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from policies.continuous_policy import ContinuousPolicy
 
-def load_cartpole_policy(path, temp, state_dim, action_dim, hidden_dim):
+def load_cartpole_policy(path, temp, state_dim, hidden_dim, action_dim):
     # The Q network
     model = torch.nn.Sequential(
                 torch.nn.Linear(state_dim, hidden_dim),

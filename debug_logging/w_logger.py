@@ -39,7 +39,7 @@ class SimpleDiscretePrintWLogger(AbstractWLogger):
 
         # estimate oracle W vector
         self.w_oracle = calculate_tabular_w_oracle(
-            env=env, pi_b=pi_b, pi_e=pi_e, gamma=gamma, num_s=env.num_s)
+            env=env, pi_b=pi_b, pi_e=pi_e, gamma=gamma, num_s=env.num_s, tau_len=100, burn_in=10)
         tau_list_oracle = self.env.generate_roll_out(
             pi=self.pi_e, num_tau=1, tau_len=oracle_tau_len, gamma=gamma)
         sample_idx = list(range(oracle_tau_len))
@@ -98,13 +98,13 @@ class SimpleDiscretePrintWLogger(AbstractWLogger):
         print("")
 
         
-class SimpleDiscretePrintWLogger(AbstractWLogger):
-    def __init__(self, env, pi_e, pi_b, gamma, oracle_tau_len=1000000):
+class SimpleContinuousPrintWLogger(AbstractWLogger):
+    def __init__(self, env, pi_e, pi_b, gamma, hidden_dim, oracle_tau_len=1000000):
         AbstractWLogger.__init__(self, env, pi_e, pi_b, gamma)
 
         # estimate oracle W vector
-        self.w_oracle = calculate_tabular_w_oracle(
-            env=env, pi_b=pi_b, pi_e=pi_e, gamma=gamma, num_s=env.num_s)
+        self.w_oracle = calculate_continuous_w_oracle(
+            env=env, pi_b=pi_b, pi_e=pi_e, gamma=gamma, hidden_dim=hidden_dim)
         tau_list_oracle = self.env.generate_roll_out(
             pi=self.pi_e, num_tau=1, tau_len=oracle_tau_len, gamma=gamma)
         sample_idx = list(range(oracle_tau_len))
@@ -147,7 +147,7 @@ class SimpleDiscretePrintWLogger(AbstractWLogger):
             w_err_norm = 0.0
             for s, a, s_prime, _ in data_loader:
                 w_pred = w(s).view(-1)
-                w_true = self.w_oracle[s]
+                w_true = self.w_oracle(s)
                 w_err_total += ((w_pred - w_true) ** 2).sum()
                 w_err_norm += len(s)
             w_rmse = float((w_err_total / w_err_norm) ** 0.5)

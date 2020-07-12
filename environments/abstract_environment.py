@@ -9,7 +9,7 @@ class AbstractEnvironment(object):
         self.num_a = num_a
         self.is_s_discrete = is_s_discrete
 
-    def generate_roll_out(self, pi, num_tau, tau_len, burn_in=0, gamma=None, temp=None, alpha=None):
+    def generate_roll_out(self, pi, num_tau, tau_len, burn_in=0, gamma=None):
         """
         Generates roll out (list of trajectories, each of which is a tuple
             (s, a, s', r) of pytorch arrays
@@ -34,12 +34,7 @@ class AbstractEnvironment(object):
                     s = self.reset()
                 else:
                     s = successor_states[-1]
-                    
-                if self.is_s_discrete:
-                    p = np.array(pi(s))
-                else:
-                    p = (pi(s)).detach().cpu().numpy()
-                
+                p = np.array(pi(s))
                 p = p / p.sum()
                 a = np.random.choice(list(range(self.num_a)), p=p)
                 s_prime, r = self.step(a)

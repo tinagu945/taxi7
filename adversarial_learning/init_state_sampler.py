@@ -39,14 +39,15 @@ class ContinuousInitStateSampler(AbstractInitStateSampler):
     Implementation for discrete scenarios where we know the initial state
     probabilities
     """
-    def __init__(self, low, high): 
+    def __init__(self, low, high, env): 
         AbstractInitStateSampler.__init__(self)
         self.low = low
         self.high = high
+        self.env = env
         
     def get_sample(self, batch_size):    
-        init_batch = self.env.np_random.uniform(low=self.low, high=self.high, size=(batch_size, 4,))
-        return torch.from_numpy(init_batch)
+        init_batch = self.env.env.np_random.uniform(low=self.low, high=self.high, size=(batch_size, 4,))
+        return torch.from_numpy(init_batch).float()
         
         
         

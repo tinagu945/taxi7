@@ -5,18 +5,19 @@ from adversarial_learning.game_objectives import w_game_objective
 from adversarial_learning.init_state_sampler import ContinuousInitStateSampler
 from adversarial_learning.oadam import OAdam
 from adversarial_learning.tau_list_dataset import TauListDataLoader
-from debug_logging.w_logger import SimpleContinuousPrintWLogge
+from debug_logging.w_logger import SimpleContinuousPrintWLogger
 from environments.cartpole_environment import CartpoleEnvironment
 from estimators.benchmark_estimators import on_policy_estimate
 from estimators.continuous_estimators import w_estimator_continuous
 from models.continuous_models import QNetworkModel
 from models.w_adversary_wrapper import WAdversaryWrapper
+from policies.continuous_policy import MixtureContinuousPolicy
 from policies.cartpole_policies import load_cartpole_policy
 from utils.torch_utils import load_tensor_from_npy
 
 
 
-def train_w_network(train_tau_list, pi_e, pi_b, num_epochs, batch_size, w, f,
+def train_w_network(env, train_tau_list, pi_e, pi_b, num_epochs, batch_size, w, f,
                     w_optimizer, f_optimizer, gamma, init_state_dist,
                     val_tau_list=None, val_freq=10, logger=None):
     """
@@ -40,7 +41,7 @@ def train_w_network(train_tau_list, pi_e, pi_b, num_epochs, batch_size, w, f,
     :return: None
     """
     assert isinstance(f, WAdversaryWrapper)
-    init_state_sampler = ContinuousInitStateSampler(init_state_dist[0], init_state_dist[1])
+    init_state_sampler = ContinuousInitStateSampler(init_state_dist[0], init_state_dist[1], env)
     train_data_loader = TauListDataLoader(tau_list=train_tau_list,
                                           batch_size=batch_size)
     if val_tau_list:
@@ -75,39 +76,37 @@ def debug():
     gamma = 0.98
     alpha = 0.6
     temp = 2.0
-    hidden_dim = 64
-    pi_e = load_cartpole_policy("logs/cartpole_best.pt", temp)
-    pi_other = load_cartpole_policy("logs/cartpole_210_318.0.pt", temp)
+    hidden_dim = 50
+    pi_e = load_cartpole_policy("logs/cartpole_best.pt", temp, env.num_s, hidden_dim, env.num_a)
+    pi_other = load_cartpole_policy("logs/cartpole_210_318.0.pt", temp, env.num_s, hidden_dim, env.num_a)
     pi_b = MixtureContinuousPolicy(pi_e, pi_other, alpha)
     
     
 
     # set up logger
-    oracle_tau_len = 1000000
+    oracle_tau_len = 1000000 #//100000
     # From gym repo, reset(): self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
     init_state_dist = [-0.05, 0.05]
     logger = SimpleContinuousPrintWLogger(env=env, pi_e=pi_e, pi_b=pi_b,
                                         gamma=gamma,
-                                        oracle_tau_len=oracle_tau_len)
-
+                                        oracle_tau_len=oracle_tau_len, hidden_dim=hidden_dim)
     # generate train, val, and test data
-    tau_len = 200000
-    burn_in = 100000
+    tau_len = 200000 #//10000
+    burn_in = 100000 #//10000
     train_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
                                            burn_in=burn_in)
     val_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
                                          burn_in=burn_in)
     test_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
                                           burn_in=burn_in)
-
     # define networks and optimizers
-    w = QNetworkModel(env.num_s, hidden_dim, env.num_a)
-    f = WAdversaryWrapper(QNetworkModel(env.num_s, hidden_dim, env.num_a))
+    w = QNetworkModel(env.num_s, hidden_dim)
+    f = WAdversaryWrapper(QNetworkModel(env.num_s, hidden_dim))
     w_lr = 1e-3
     w_optimizer = OAdam(w.parameters(), lr=w_lr, betas=(0.5, 0.9))
     f_optimizer = OAdam(f.parameters(), lr=w_lr*5, betas=(0.5, 0.9))
 
-    train_w_network(train_tau_list=train_tau_list, pi_e=pi_e, pi_b=pi_b,
+    train_w_network(env=env, train_tau_list=train_tau_list, pi_e=pi_e, pi_b=pi_b,
                     num_epochs=1000, batch_size=1024, w=w, f=f,
                     w_optimizer=w_optimizer, f_optimizer=f_optimizer,
                     gamma=gamma, init_state_dist=init_state_dist,

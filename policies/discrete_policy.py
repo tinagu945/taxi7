@@ -43,8 +43,7 @@ class MixtureDiscretePolicy(DiscretePolicy):
         :param pi_1_weight: weight to give to first policy
         :return: new mixture policy
         """
-        assert isinstance(pi_1, DiscretePolicy)
-        assert isinstance(pi_2, DiscretePolicy)
+
         policy_probs = (pi_1_weight * pi_1.policy_probs
                         + (1 - pi_1_weight) * pi_2.policy_probs)
         DiscretePolicy.__init__(self, policy_probs)

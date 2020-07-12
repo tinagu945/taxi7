@@ -66,10 +66,10 @@ def w_game_objective(w, f, s, a, s_prime, pi_e, pi_b, s_0, gamma):
     w_of_s_prime = w(s_prime).view(-1)
     f_of_s_prime = f(s_prime).view(-1)
     f_of_s_0 = f(s_0).view(-1)
-
     pi_ratio = pi_e(s) / pi_b(s)        
     eta_s_a = torch.gather(pi_ratio, dim=1, index=a.view(-1, 1)).view(-1)
 
+#     import pdb;pdb.set_trace()
     epsilon = gamma * w_of_s * eta_s_a - w_of_s_prime
     c = f.get_constraint_multipliers()
     m_1 = (f_of_s_prime * epsilon

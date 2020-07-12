@@ -187,9 +187,9 @@ class DQN_replay(DQN):
             
             
 env = gym.envs.make("CartPole-v1")
-# Number of states
+# Number of states, 4
 n_state = env.observation_space.shape[0]
-# Number of actions
+# Number of actions, 2
 n_action = env.action_space.n
 # Number of episodes
 episodes = 500
