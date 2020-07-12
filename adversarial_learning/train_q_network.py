@@ -94,10 +94,6 @@ def debug():
     q_lr = 1e-1
     q_optimizer = OAdam(q.parameters(), lr=q_lr, betas=(0.5, 0.9))
     f_optimizer = OAdam(f.parameters(), lr=q_lr*5, betas=(0.5, 0.9))
-<<<<<<< HEAD
-    print('here!')
-=======
-
     # do ERM pre-training
     train_q_network_erm(train_tau_list=train_tau_list, pi_e=pi_e,
                         num_epochs=100, batch_size=1024, q=q,
@@ -105,7 +101,6 @@ def debug():
                         val_tau_list=val_tau_list, val_freq=10, logger=logger)
 
     # train using adversarial algorithm
->>>>>>> efd75c6f64c70497b347e12d46f7a45e910933b7
     train_q_network(train_tau_list=train_tau_list, pi_e=pi_e, num_epochs=1000,
                     batch_size=1024, q=q, f=f, q_optimizer=q_optimizer,
                     f_optimizer=f_optimizer, gamma=gamma,
