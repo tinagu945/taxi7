@@ -1,5 +1,4 @@
 from torch.optim import Adam
-
 from adversarial_learning.game_objectives import q_game_objective
 from adversarial_learning.oadam import OAdam
 from dataset.init_state_sampler import DiscreteInitStateSampler
@@ -75,13 +74,11 @@ def debug():
     init_state_sampler = DiscreteInitStateSampler(init_state_dist)
     logger = SimplePrintQLogger(env=env, pi_e=pi_e, gamma=gamma,
                                 init_state_sampler=init_state_sampler)
-
     # generate train and val data
     train_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=200000,
                                            burn_in=100000)
     val_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=200000,
                                          burn_in=100000)
-
     # define networks and optimizers
     # q = StateEmbeddingModel(num_s=env.num_s, num_out=env.num_a)
     q = fit_q_tabular(tau_list=train_tau_list, pi=pi_e, gamma=gamma)
@@ -91,7 +88,6 @@ def debug():
     q_lr = 1e-3
     q_optimizer = OAdam(q.parameters(), lr=q_lr, betas=(0.5, 0.9))
     f_optimizer = OAdam(f.parameters(), lr=q_lr*5, betas=(0.5, 0.9))
-
     # do ERM pre-training
     # train_q_network_erm(train_tau_list=train_tau_list, pi_e=pi_e,
     #                     num_epochs=100, batch_size=1024, q=q,

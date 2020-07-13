@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from environments.cartpole_environment import CartpoleEnvironment
 
 
 class AbstractInitStateSampler(object):
@@ -70,3 +71,40 @@ class DecodingDiscreteInitStateSampler(DiscreteInitStateSampler):
     def get_sample(self, batch_size):
         s_encoded = DiscreteInitStateSampler.get_sample(self, batch_size)
         return self.decoder(s_encoded)
+
+
+class GenericInitStateSampler(AbstractInitStateSampler):
+    """
+    Implementation for generic cases where we sample initial states using some
+    given function
+
+    """
+    def __init__(self, sampler, expectation_sample_size):
+        AbstractInitStateSampler.__init__(self)
+        self.sampler = sampler
+        self.expectation_sample_size = expectation_sample_size
+
+    def get_sample(self, batch_size):
+        return self.sampler(batch_size)
+
+    def compute_mean(self, f):
+        sample = self.sampler(self.expectation_sample_size)
+        return f(sample).mean()
+
+
+class CartpoleInitStateSampler(GenericInitStateSampler):
+    """
+    Implementation for cartpole
+
+    """
+    def __init__(self, env, expectation_sample_size=100000):
+        assert isinstance(env, CartpoleEnvironment)
+        self.low = -0.05
+        self.high= 0.05
+        sampler = lambda b_: env.gym_env.np_random_uniform(
+            low=self.low, high=self.high, size=(b_, 4))
+        GenericInitStateSampler.__init__(
+            self, sampler=sampler,
+            expectation_sample_size=expectation_sample_size)
+
+
