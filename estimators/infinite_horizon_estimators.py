@@ -1,39 +1,36 @@
 import torch
-from adversarial_learning.tau_list_dataset import TauListDataLoader
-from policies.discrete_policy import DiscretePolicy
+from dataset.init_state_sampler import AbstractInitStateSampler
+from dataset.tau_list_dataset import TauListDataLoader
 
 
-def q_estimator_discrete(pi_e, gamma, q, init_state_dist):
+
+def q_estimator(pi_e, gamma, q, init_state_sampler):
     """
     q-based estimator for policy value in discrete settings
 
-    :param pi_e: discrete evaluation policy (should be of DiscretePolicy class)
+    :param pi_e: evaluation policy (should be from policies module)
     :param gamma: discount factor (0 < gamma <= 1)
     :param q: q network (assumed to be nn.Module, or some other class with
         identical __call__ semantics)
-    :param init_state_dist: pytorch array of shape (num_s,), where num_s
-        is the number of different states, contains probabilities of starting
-        in each state
+    :param init_state_dist: should be an object that implements
+        AbstractInitStateSampler, allows computing mean over initial state
+        distribution
     :return: q-based policy value estimate
     """
-    assert isinstance(pi_e, DiscretePolicy)
-    num_s = init_state_dist.shape[0]
-    s_all = torch.LongTensor(range(num_s))
-    q_table = q(s_all)
-    pi_table = pi_e.get_probability_table()
-    # print(q_table.shape, pi_table.shape, init_state_dist.shape)
-    mean_v = torch.einsum("sa,sa,s->", q_table, pi_table, init_state_dist)
+    assert isinstance(init_state_sampler, AbstractInitStateSampler)
+    v = lambda s_: (q(s_) * pi_e(s_)).sum(1)
+    mean_v = init_state_sampler.compute_mean(v)
     return float((1 - gamma) * mean_v)
 
 
-def w_estimator_discrete(tau_list_data_loader, pi_e, pi_b, w):
+def w_estimator(tau_list_data_loader, pi_e, pi_b, w):
     """
     w-based estimator for policy value in discrete settings
 
     :param tau_data_loader: data loader for trajectory list
         (should be of class TauListDataLoader)
-    :param pi_e: discrete evaluation policy (should be of DiscretePolicy class)
-    :param pi_b: discrete behavior policy (should be of DiscretePolicy class)
+    :param pi_e: evaluation policy (should be from policies module)
+    :param pi_b: behavior policy (should be from policies module)
     :param w: w network (assumed to be nn.Module, or some other class with
         identical __call__ semantics)
     :return: w-based policy value estimate

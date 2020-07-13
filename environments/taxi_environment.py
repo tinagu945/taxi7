@@ -56,7 +56,7 @@ class TaxiEnvironment(AbstractEnvironment):
             state_tensor[x, y, 2] = 1.0
         return state_tensor
 
-    def decode_state_tensor(self, s):
+    def encode_state_tensor(self, s):
         """
         :param s: either single state of shape (grid_length, grid_length, 3),
             or batch of states of size (b, grid_length, grid_length, 3)
@@ -93,15 +93,40 @@ class TaxiEnvironment(AbstractEnvironment):
         return (taxi_status + 5 * (passenger_status +
                                    (taxi_x * self.grid_length + taxi_y) * 16))
 
-    def state_decoding(self, state):
+    def decode_state(self, s):
+        """
+        :param s: either single integer state encoding or a LongTensor batch
+            of state encodings
+        :return: either a single decoded state, or a batch of decoded states
+        """
         length = self.grid_length
-        taxi_status = state % 5
-        state /= 5
-        passenger_status = state % 16
-        state /= 16
-        y = state % length
-        x = state / length
-        return x, y, passenger_status, taxi_status
+        taxi_status = s % 5
+        passenger_status = (s // 5) % 16
+        taxi_y = (s // 80) % length
+        taxi_x = (s // 80) // length
+        if isinstance(s, torch.Tensor):
+            batch_size = s.shape[0]
+            batch_idx = torch.LongTensor(range(batch_size))
+            s_decoded = torch.zeros(batch_size, length, length, 3)
+            s_decoded[batch_idx, taxi_x, taxi_y, 0] = 1.0
+            for i in range(4):
+                x, y = self.possible_passenger_loc[i]
+                passenger_flags = ((passenger_status & (1 << i)) > 0).float()
+                s_decoded[batch_idx, x, y, 1] = passenger_flags
+                destination_flags = (taxi_status == i).float()
+                s_decoded[batch_idx, x, y, 2] = destination_flags
+        elif isinstance(s, int):
+            s_decoded = torch.zeros(length, length, 3)
+            s_decoded[taxi_x, taxi_y, 0] = 1.0
+            for i in range(4):
+                x, y = self.possible_passenger_loc[i]
+                if passenger_status & (1 << i):
+                    s_decoded[x, y, 1] = 1.0
+                if taxi_status == i:
+                    s_decoded[x, y, 2] = 1.0
+        else:
+            raise ValueError("invalid state or state batch: %r" % s)
+        return s_decoded
 
     def render(self):
         MAP = []
@@ -181,19 +206,23 @@ class TaxiEnvironment(AbstractEnvironment):
 
 
 def debug():
-    env = TaxiEnvironment(discrete_state=False)
+    env = TaxiEnvironment(discrete_state=True)
     pi = RandomPolicy(num_a=env.num_a, state_rank=3)
     tau_list = env.generate_roll_out(pi=pi, num_tau=1, tau_len=10)
     s, a, s_prime, r = tau_list[0]
-    print(s.shape)
-    print(a.shape)
-    print(s_prime.shape)
-    print(r.shape)
+    print("states:")
+    print(s_prime)
     print("decoded states:")
-    print(env.decode_state_tensor(s_prime))
-    print("decoded states one by one:")
+    print(env.decode_state(s_prime))
+    # print("encoded states one by one:")
+    # for s_ in s_prime:
+    #     print(env.encode_state_tensor(s_))
+    print("encoded decoded states")
+    print(env.encode_state_tensor(env.decode_state(s_prime)))
+    print("encoded decoded states one by one")
     for s_ in s_prime:
-        print(env.decode_state_tensor(s_))
+        s_ = int(s_)
+        print(env.encode_state_tensor(env.decode_state(s_)))
 
 
 

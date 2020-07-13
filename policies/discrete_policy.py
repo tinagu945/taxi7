@@ -31,26 +31,7 @@ class DiscretePolicy(object):
         return self.policy_probs
 
 
-class MixtureDiscretePolicy(DiscretePolicy):
-    """
-    class to implement a policy as a mixture between two discrete policies
-    useful for taxi experiments
-    """
-    def __init__(self, pi_1, pi_2, pi_1_weight):
-        """
-        :param pi_1: first policy to mix between
-        :param pi_2: second policy to mix between
-        :param pi_1_weight: weight to give to first policy
-        :return: new mixture policy
-        """
-        assert isinstance(pi_1, DiscretePolicy)
-        assert isinstance(pi_2, DiscretePolicy)
-        policy_probs = (pi_1_weight * pi_1.policy_probs
-                        + (1 - pi_1_weight) * pi_2.policy_probs)
-        DiscretePolicy.__init__(self, policy_probs)
-
-
-class DecodingDiscretePolicy(DiscretePolicy):
+class EncodingDiscretePolicy(DiscretePolicy):
     """
     class to implement a policy for continuous states that have a known
     discrete encoding (e.g. for Taxi environment when we represent state

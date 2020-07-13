@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from environments.taxi_environment import TaxiEnvironment
-from policies.discrete_policy import DiscretePolicy, DecodingDiscretePolicy
+from policies.discrete_policy import DiscretePolicy, EncodingDiscretePolicy
 
 
 def load_taxi_policy(path):
@@ -12,7 +12,7 @@ def load_taxi_policy(path):
 def load_taxi_policy_continuous(path, env):
     assert isinstance(env, TaxiEnvironment)
     pi_table = np.load(path)
-    return DecodingDiscretePolicy(pi_table, env.decode_state_tensor)
+    return EncodingDiscretePolicy(pi_table, env.encode_state_tensor)
 
 
 def debug():

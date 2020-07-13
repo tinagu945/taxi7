@@ -1,11 +1,13 @@
 import torch
 import numpy as np
 from collections import defaultdict
+from dataset.init_state_sampler import DiscreteInitStateSampler
 from environments.taxi_environment import TaxiEnvironment
 
-from policies.discrete_policy import DiscretePolicy, MixtureDiscretePolicy
+from policies.discrete_policy import DiscretePolicy
+from policies.mixture_policies import MixtureDiscretePolicy
 from policies.taxi_policies import load_taxi_policy
-from estimators.discrete_estimators import q_estimator_discrete
+from estimators.infinite_horizon_estimators import q_estimator
 from models.discrete_models import QTableModel
 from utils.torch_utils import load_tensor_from_npy
 from estimators.benchmark_estimators import on_policy_estimate
@@ -88,11 +90,12 @@ def debug():
 
     init_state_dist_path = "taxi_data/init_state_dist.npy"
     init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
+    init_state_sampler = DiscreteInitStateSampler(init_state_dist)
 
     tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=200000)
     q = fit_q_tabular(tau_list=tau_list, pi=pi_e, gamma=gamma)
-    q_estimate = q_estimator_discrete(pi_e=pi_e, gamma=gamma, q=q,
-                                      init_state_dist=init_state_dist)
+    q_estimate = q_estimator(pi_e=pi_e, gamma=gamma, q=q,
+                             init_state_sampler=init_state_sampler)
     on_policy_est = on_policy_estimate(env=env, pi_e=pi_e, gamma=gamma,
                                        num_tau=1000, tau_len=1000)
     squared_error = (q_estimate - on_policy_est) ** 2
