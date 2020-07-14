@@ -1,19 +1,16 @@
-import sys
-sys.path.insert(0,'./')
 import numpy as np
 import torch
 from environments.abstract_environment import AbstractEnvironment
 from policies.debug_policies import RandomPolicy
 import gym
 
+
 class CartpoleEnvironment(AbstractEnvironment):
     def __init__(self):
         """Only continuous version now"""
-        self.env = gym.envs.make("CartPole-v1")
-        #TODO: num_s number should be inf.
-        super().__init__(num_s=4, num_a=2,
-                         is_s_discrete=False)
-        self.env.reset()
+        self.gym_env = gym.envs.make("CartPole-v1")
+        super().__init__(num_s=float("inf"), num_a=2, is_s_discrete=False)
+        self.gym_env.reset()
         
     def generate_roll_out(self, pi, num_tau, tau_len, burn_in=0, gamma=None):
         """
@@ -62,13 +59,13 @@ class CartpoleEnvironment(AbstractEnvironment):
             tau_list.append((s_tensor, a_tensor, ss_tensor, r_tensor))
         return tau_list
 
-
     def reset(self):
-        return torch.Tensor([self.env.reset()]).squeeze()
+        return torch.Tensor([self.gym_env.reset()]).squeeze()
 
     def step(self, action):
-        next_state, reward, done, _ = self.env.step(action)
+        next_state, reward, done, _ = self.gym_env.step(action)
         return torch.Tensor([next_state]).squeeze(), torch.Tensor([reward]).squeeze(), done
+
 
 def debug():
     env = CartpoleEnvironment()

@@ -2,7 +2,7 @@ import torch
 from environments.taxi_environment import TaxiEnvironment
 from models.w_adversary_wrapper import WAdversaryWrapper
 from models.discrete_models import StateEmbeddingModel
-from policies.discrete_policy import MixtureDiscretePolicy
+from policies.mixture_policies import MixtureDiscretePolicy
 from policies.taxi_policies import load_taxi_policy
 
 

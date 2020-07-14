@@ -1,6 +1,6 @@
 import torch
-from adversarial_learning.tau_list_dataset import TauListDataLoader
-from estimators.discrete_estimators import q_estimator_discrete
+
+from dataset.tau_list_dataset import TauListDataLoader
 
 
 def train_q_network_erm(train_tau_list, pi_e, num_epochs,

@@ -3,7 +3,7 @@ import torch
 from adversarial_learning.game_objectives import q_game_objective
 from benchmark_methods.discrete_q_benchmark import fit_q_tabular
 from estimators.benchmark_estimators import on_policy_estimate
-from estimators.discrete_estimators import q_estimator_discrete
+from estimators.infinite_horizon_estimators import q_estimator
 
 
 class AbstractQLogger(object):
@@ -42,12 +42,12 @@ class AbstractQLogger(object):
 
 
 class SimplePrintQLogger(AbstractQLogger):
-    def __init__(self, env, pi_e, gamma, init_state_dist,
+    def __init__(self, env, pi_e, gamma, init_state_sampler,
                  oracle_tau_len=1000000):
         AbstractQLogger.__init__(self, env, pi_e, gamma)
 
-        # train an oracle Q function that will be used for debug_logging error in
-        # Q function
+        # train an oracle Q function that will be used for debug_logging error
+        # in Q function
         tau_list_oracle = self.env.generate_roll_out(
             pi=self.pi_e, num_tau=1, tau_len=oracle_tau_len, gamma=gamma)
         self.q_oracle = fit_q_tabular(tau_list=tau_list_oracle, pi=self.pi_e,
@@ -65,7 +65,7 @@ class SimplePrintQLogger(AbstractQLogger):
         self.policy_val_oracle = on_policy_estimate(
             env=self.env, pi_e=self.pi_e, gamma=self.gamma,
             num_tau=None, tau_len=None, tau_list=tau_list_oracle)
-        self.init_state_dist = init_state_dist
+        self.init_state_sampler = init_state_sampler
 
     def log_benchmark(self, train_data_loader, val_data_loader, q, epoch):
         print("Validation results for benchmark epoch %d" % epoch)
@@ -111,9 +111,9 @@ class SimplePrintQLogger(AbstractQLogger):
         print("uniform gmm norm:", (mean_eq ** 2) / mean_eq_squared)
 
         # estimate policy value
-        policy_val_estimate = q_estimator_discrete(
+        policy_val_estimate = q_estimator(
             pi_e=self.pi_e, gamma=self.gamma, q=q,
-            init_state_dist=self.init_state_dist)
+            init_state_sampler=self.init_state_sampler)
         square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
         print("Policy value estimate squared error:", square_error)
         print("")
@@ -176,9 +176,9 @@ class SimplePrintQLogger(AbstractQLogger):
         print("uniform gmm norm:", (mean_eq ** 2) / mean_eq_squared)
 
         # estimate policy value
-        policy_val_estimate = q_estimator_discrete(
+        policy_val_estimate = q_estimator(
             pi_e=self.pi_e, gamma=self.gamma, q=q,
-            init_state_dist=self.init_state_dist)
+            init_state_sampler=self.init_state_sampler)
         square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
         print("Policy value estimate squared error:", square_error)
         print("")

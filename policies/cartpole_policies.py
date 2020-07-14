@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from policies.continuous_policy import ContinuousPolicy
+from policies.continuous_policy import QNetworkPolicy
 
 def load_cartpole_policy(path, temp, state_dim, hidden_dim, action_dim):
     # The Q network
@@ -13,4 +13,4 @@ def load_cartpole_policy(path, temp, state_dim, hidden_dim, action_dim):
                 )
     model.load_state_dict(torch.load(path))
     model.eval()
-    return ContinuousPolicy(model, temp)
+    return QNetworkPolicy(model, temp)
