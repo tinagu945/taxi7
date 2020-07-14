@@ -13,8 +13,9 @@ from models.cnn_models import TaxiSimpleCNN
 from models.discrete_models import StateEmbeddingModel
 from models.w_adversary_wrapper import WAdversaryWrapper
 from policies.cartpole_policies import load_cartpole_policy
-from policies.mixture_policies import GenericMixturePolicy
-from policies.taxi_policies import load_taxi_policy_continuous
+from policies.mixture_policies import GenericMixturePolicy, \
+    MixtureDiscretePolicy
+from policies.taxi_policies import load_taxi_policy_continuous, load_taxi_policy
 from utils.torch_utils import load_tensor_from_npy
 
 
@@ -75,31 +76,32 @@ def train_w_network(train_tau_list, pi_e, pi_b, num_epochs, batch_size, w, f,
 
 def debug():
     # set up environment and policies
-    env = CartpoleEnvironment()
+    env = TaxiEnvironment()
     gamma = 0.98
     alpha = 0.6
     temp = 2.0
     hidden_dim = 50
     state_dim = 2
-    # pi_e = load_taxi_policy("taxi_data/saved_policies/pi19.npy")
-    # pi_s = load_taxi_policy("taxi_data/saved_policies/pi3.npy")
-    # pi_b = MixtureDiscretePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
+    pi_e = load_taxi_policy("taxi_data/saved_policies/pi19.npy")
+    pi_s = load_taxi_policy("taxi_data/saved_policies/pi3.npy")
+    pi_b = MixtureDiscretePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
     # pi_e = load_taxi_policy_continuous("taxi_data/saved_policies/pi19.npy", env)
     # pi_s = load_taxi_policy_continuous("taxi_data/saved_policies/pi3.npy", env)
     # pi_b = GenericMixturePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
-    pi_e = load_cartpole_policy("logs/cartpole_best.pt", temp, state_dim,
-                                hidden_dim, env.num_a)
-    pi_other = load_cartpole_policy("logs/cartpole_210_318.0.pt", temp,
-                                    state_dim, hidden_dim, env.num_a)
-    pi_b = GenericMixturePolicy(pi_e, pi_other, alpha)
+    # pi_e = load_cartpole_policy("logs/cartpole_best.pt", temp, state_dim,
+    #                             hidden_dim, env.num_a)
+    # pi_other = load_cartpole_policy("logs/cartpole_210_318.0.pt", temp,
+    #                                 state_dim, hidden_dim, env.num_a)
+    # pi_b = GenericMixturePolicy(pi_e, pi_other, alpha)
 
     # set up logger
     oracle_tau_len = 1000000
     init_state_dist_path = "taxi_data/init_state_dist.npy"
-    # init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
+    init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
+    init_state_sampler = DiscreteInitStateSampler(init_state_dist)
     # init_state_sampler = DecodingDiscreteInitStateSampler(init_state_dist,
     #                                                       env.decode_state)
-    init_state_sampler = CartpoleInitStateSampler(env)
+    # init_state_sampler = CartpoleInitStateSampler(env)
     # logger = SimpleDiscretePrintWLogger(env=env, pi_e=pi_e, pi_b=pi_b,
     #                                     gamma=gamma,
     #                                     oracle_tau_len=oracle_tau_len)
@@ -109,11 +111,11 @@ def debug():
     # generate train, val, and test data
     tau_len = 200000
     burn_in = 100000
-    train_tau_list = env.generate_roll_out(pi=[pi_b], num_tau=1, tau_len=tau_len,
+    train_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
                                            burn_in=burn_in)
-    val_tau_list = env.generate_roll_out(pi=[pi_b], num_tau=1, tau_len=tau_len,
+    val_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
                                          burn_in=burn_in)
-    test_tau_list = env.generate_roll_out(pi=[pi_b], num_tau=1, tau_len=tau_len,
+    test_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
                                           burn_in=burn_in)
 
     # define networks and optimizers
