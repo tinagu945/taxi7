@@ -76,32 +76,33 @@ def train_w_network(train_tau_list, pi_e, pi_b, num_epochs, batch_size, w, f,
 
 def debug():
     # set up environment and policies
-    env = TaxiEnvironment()
+    # env = TaxiEnvironment()
+    env = CartpoleEnvironment()
     gamma = 0.98
     alpha = 0.6
     temp = 2.0
     hidden_dim = 50
-    state_dim = 2
-    pi_e = load_taxi_policy("taxi_data/saved_policies/pi19.npy")
-    pi_s = load_taxi_policy("taxi_data/saved_policies/pi3.npy")
-    pi_b = MixtureDiscretePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
+    state_dim = 4
+    # pi_e = load_taxi_policy("taxi_data/saved_policies/pi19.npy")
+    # pi_s = load_taxi_policy("taxi_data/saved_policies/pi3.npy")
+    # pi_b = MixtureDiscretePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
     # pi_e = load_taxi_policy_continuous("taxi_data/saved_policies/pi19.npy", env)
     # pi_s = load_taxi_policy_continuous("taxi_data/saved_policies/pi3.npy", env)
     # pi_b = GenericMixturePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
-    # pi_e = load_cartpole_policy("logs/cartpole_best.pt", temp, state_dim,
-    #                             hidden_dim, env.num_a)
-    # pi_other = load_cartpole_policy("logs/cartpole_210_318.0.pt", temp,
-    #                                 state_dim, hidden_dim, env.num_a)
-    # pi_b = GenericMixturePolicy(pi_e, pi_other, alpha)
+    pi_e = load_cartpole_policy("logs/cartpole_best.pt", temp, state_dim,
+                                hidden_dim, env.num_a)
+    pi_other = load_cartpole_policy("logs/cartpole_210_318.0.pt", temp,
+                                    state_dim, hidden_dim, env.num_a)
+    pi_b = GenericMixturePolicy(pi_e, pi_other, alpha)
 
     # set up logger
     oracle_tau_len = 1000000
     init_state_dist_path = "taxi_data/init_state_dist.npy"
-    init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
-    init_state_sampler = DiscreteInitStateSampler(init_state_dist)
+    # init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
+    # init_state_sampler = DiscreteInitStateSampler(init_state_dist)
     # init_state_sampler = DecodingDiscreteInitStateSampler(init_state_dist,
     #                                                       env.decode_state)
-    # init_state_sampler = CartpoleInitStateSampler(env)
+    init_state_sampler = CartpoleInitStateSampler(env)
     # logger = SimpleDiscretePrintWLogger(env=env, pi_e=pi_e, pi_b=pi_b,
     #                                     gamma=gamma,
     #                                     oracle_tau_len=oracle_tau_len)

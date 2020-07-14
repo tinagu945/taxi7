@@ -12,7 +12,7 @@ class QNetworkPolicy(object):
         self.temp = temp
 
     def __call__(self, s):
-        return (self.q_network(s)/self.temp).softmax(-1)
+        return (self.q_network(s) / self.temp).softmax(-1).detach()
 
     def get_q_network(self):
         return self.q_network
