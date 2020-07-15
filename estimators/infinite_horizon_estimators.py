@@ -1,6 +1,6 @@
 import torch
+from torch.utils.data import DataLoader
 from dataset.init_state_sampler import AbstractInitStateSampler
-from dataset.tau_list_dataset import TauListDataLoader
 
 
 
@@ -28,14 +28,14 @@ def w_estimator(tau_list_data_loader, pi_e, pi_b, w):
     w-based estimator for policy value in discrete settings
 
     :param tau_data_loader: data loader for trajectory list
-        (should be of class TauListDataLoader)
+        (should be of class DataLoader)
     :param pi_e: evaluation policy (should be from policies module)
     :param pi_b: behavior policy (should be from policies module)
     :param w: w network (assumed to be nn.Module, or some other class with
         identical __call__ semantics)
     :return: w-based policy value estimate
     """
-    assert isinstance(tau_list_data_loader, TauListDataLoader)
+    assert isinstance(tau_list_data_loader, DataLoader)
     weighted_reward_total = 0.0
     weighted_reward_norm = 0.0
     for s, a, _, r in tau_list_data_loader:

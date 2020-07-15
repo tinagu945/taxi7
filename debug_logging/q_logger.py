@@ -48,23 +48,20 @@ class SimplePrintQLogger(AbstractQLogger):
 
         # train an oracle Q function that will be used for debug_logging error
         # in Q function
-        tau_list_oracle = self.env.generate_roll_out(
+        pi_e_data = self.env.generate_roll_out(
             pi=self.pi_e, num_tau=1, tau_len=oracle_tau_len, gamma=gamma)
-        self.q_oracle = fit_q_tabular(tau_list=tau_list_oracle, pi=self.pi_e,
+        self.q_oracle = fit_q_tabular(data=pi_e_data, pi=self.pi_e,
                                       gamma=self.gamma)
         sample_idx = list(range(oracle_tau_len))
         random.shuffle(sample_idx)
-        s, a, s_prime, r = tau_list_oracle[0]
-        self.s_sample = s[sample_idx[:5]]
-        self.a_sample = a[sample_idx[:5]]
-        self.s_prime_sample = s_prime[sample_idx[:5]]
-        self.r_sample = r[sample_idx[:5]]
+        self.s_sample = pi_e_data.s[sample_idx[:5]]
+        self.a_sample = pi_e_data.a[sample_idx[:5]]
+        self.s_prime_sample = pi_e_data.s_prime[sample_idx[:5]]
+        self.r_sample = pi_e_data.r[sample_idx[:5]]
 
         # calculate oracle estimate of policy value that will be compared
         # against during validation
-        self.policy_val_oracle = on_policy_estimate(
-            env=self.env, pi_e=self.pi_e, gamma=self.gamma,
-            num_tau=None, tau_len=None, tau_list=tau_list_oracle)
+        self.policy_val_oracle = float(pi_e_data.r.mean())
         self.init_state_sampler = init_state_sampler
 
     def log_benchmark(self, train_data_loader, val_data_loader, q, epoch):
@@ -72,7 +69,7 @@ class SimplePrintQLogger(AbstractQLogger):
 
         # print Q function on the fixed sample
         print("Q function sample values:")
-        print(q(self.s_sample))
+        print(q(self.s_sample).detach())
 
         for which, data_loader in (("Train", train_data_loader),
                                    ("Val", val_data_loader)):
@@ -91,10 +88,10 @@ class SimplePrintQLogger(AbstractQLogger):
                                        index=self.a_sample.view(-1, 1)).view(-1)
         v_of_ss_sample = (self.pi_e(self.s_prime_sample)
                           * q(self.s_prime_sample)).sum(1)
-        print("v(ss) sample:", v_of_ss_sample)
-        print("q(s,a) sample:", q_of_s_a_sample)
+        print("v(ss) sample:", v_of_ss_sample.detach())
+        print("q(s,a) sample:", q_of_s_a_sample.detach())
         print("eq sample:", (self.r_sample + self.gamma * v_of_ss_sample
-                             - q_of_s_a_sample))
+                             - q_of_s_a_sample).detach())
         eq_total = 0.0
         eq_squared_total = 0.0
         eq_norm = 0.0
@@ -123,7 +120,7 @@ class SimplePrintQLogger(AbstractQLogger):
 
         # print Q function on the fixed sample
         print("Q function sample values:")
-        print(q(self.s_sample))
+        print(q(self.s_sample).detach())
 
         for which, data_loader in (("Train", train_data_loader),
                                    ("Val", val_data_loader)):
@@ -155,11 +152,11 @@ class SimplePrintQLogger(AbstractQLogger):
                                        index=self.a_sample.view(-1, 1)).view(-1)
         v_of_ss_sample = (self.pi_e(self.s_prime_sample)
                           * q(self.s_prime_sample)).sum(1)
-        print("v(ss) sample:", v_of_ss_sample)
-        print("q(s,a) sample:", q_of_s_a_sample)
-        print("f(s,a) sample:", f_of_s_a_sample)
+        print("v(ss) sample:", v_of_ss_sample.detach())
+        print("q(s,a) sample:", q_of_s_a_sample.detach())
+        print("f(s,a) sample:", f_of_s_a_sample.detach())
         print("eq sample:", (self.r_sample + self.gamma * v_of_ss_sample
-                             - q_of_s_a_sample))
+                             - q_of_s_a_sample).detach())
         eq_total = 0.0
         eq_squared_total = 0.0
         eq_norm = 0.0

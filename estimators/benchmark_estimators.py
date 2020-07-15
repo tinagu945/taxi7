@@ -15,7 +15,7 @@ def naive_reward_average_estimate(tau_list):
     return reward_tensor.mean()
 
 
-def on_policy_estimate(env, pi_e, gamma, num_tau, tau_len, tau_list=None):
+def on_policy_estimate(env, pi_e, gamma, num_tau, tau_len):
     """
     perform an on-policy estimate of pi_e by actually rolling out data using
     this evaluation policy
@@ -30,7 +30,6 @@ def on_policy_estimate(env, pi_e, gamma, num_tau, tau_len, tau_list=None):
     :return: on-policy estimate from tau_list discounted by gamma
     """
     assert isinstance(env, AbstractEnvironment)
-    if tau_list is None:
-        tau_list = env.generate_roll_out(pi=pi_e, num_tau=num_tau,
-                                         tau_len=tau_len, gamma=gamma)
-    return float(np.mean([r.mean() for _, _, _, r in tau_list]))
+    data = env.generate_roll_out(pi=pi_e, num_tau=num_tau,
+                                 tau_len=tau_len, gamma=gamma)
+    return float(data.r.mean())

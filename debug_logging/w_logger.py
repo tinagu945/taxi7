@@ -37,17 +37,15 @@ class SimplePrintWLogger(AbstractWLogger):
         AbstractWLogger.__init__(self, env, pi_e, pi_b, gamma)
 
         # estimate oracle W vector
-        tau_list_oracle = self.env.generate_roll_out(
+        pi_e_data = self.env.generate_roll_out(
             pi=self.pi_e, num_tau=1, tau_len=oracle_tau_len, gamma=gamma)
         sample_idx = list(range(oracle_tau_len))
         random.shuffle(sample_idx)
-        self.s_sample = tau_list_oracle[0][0][sample_idx[:5]]
+        self.s_sample = pi_e_data.s[sample_idx[:5]]
 
         # calculate oracle estimate of policy value that will be compared
         # against during validation
-        self.policy_val_oracle = on_policy_estimate(
-            env=self.env, pi_e=self.pi_e, gamma=self.gamma,
-            num_tau=None, tau_len=None, tau_list=tau_list_oracle)
+        self.policy_val_oracle = float(pi_e_data.r.mean())
 
     def log(self, train_data_loader, val_data_loader, w, f, init_state_sampler,
             epoch):
@@ -74,6 +72,23 @@ class SimplePrintWLogger(AbstractWLogger):
             mean_obj = obj_total / obj_norm
             print("%s mean objective: %f" % (which, mean_obj))
 
+            # estimate policy value
+            policy_val_estimate = w_estimator(
+                tau_list_data_loader=data_loader, pi_e=self.pi_e,
+                pi_b=self.pi_b, w=w)
+            square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
+            print("%s policy value estimate squared error: %f"
+                  % (which, square_error))
+        print("")
+
+    def log_benchmark(self, train_data_loader, val_data_loader, w, epoch):
+        print("Benchmark validation results for epoch %d" % epoch)
+
+        # print W function on the fixed sample
+        print("W sample values:", w(self.s_sample).view(-1).detach())
+
+        for which, data_loader in (("Train", train_data_loader),
+                                   ("Val", val_data_loader)):
             # estimate policy value
             policy_val_estimate = w_estimator(
                 tau_list_data_loader=data_loader, pi_e=self.pi_e,
@@ -138,3 +153,30 @@ class SimpleDiscretePrintWLogger(SimplePrintWLogger):
                   % (which, square_error))
         print("")
 
+    def log_benchmark(self, train_data_loader, val_data_loader, w, epoch):
+        print("Benchmark validation results for epoch %d" % epoch)
+
+        # print W function on the fixed sample
+        print("W sample values:", w(self.s_sample).view(-1).detach())
+
+        for which, data_loader in (("Train", train_data_loader),
+                                   ("Val", val_data_loader)):
+            # calculate error in W
+            w_err_total = 0.0
+            w_err_norm = 0.0
+            for s, a, s_prime, _ in data_loader:
+                w_pred = w(s).view(-1)
+                w_true = self.w_oracle[s]
+                w_err_total += ((w_pred - w_true) ** 2).sum()
+                w_err_norm += len(s)
+            w_rmse = float((w_err_total / w_err_norm) ** 0.5)
+            print("%s W RMSE: %f" % (which, w_rmse))
+
+            # estimate policy value
+            policy_val_estimate = w_estimator(
+                tau_list_data_loader=data_loader, pi_e=self.pi_e,
+                pi_b=self.pi_b, w=w)
+            square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
+            print("%s policy value estimate squared error: %f"
+                  % (which, square_error))
+        print("")

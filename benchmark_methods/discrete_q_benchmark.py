@@ -13,14 +13,15 @@ from utils.torch_utils import load_tensor_from_npy
 from estimators.benchmark_estimators import on_policy_estimate
 
 
-def fit_q_tabular(tau_list, pi, gamma, max_num_q_iter=100000,
+def fit_q_tabular(data, pi, gamma, max_num_q_iter=100000,
                   min_q_change=1e-7, verbose=False):
     """
     fit a q function in tabular setting, using observational data
     works by first estimating mean reward function and transition kernel,
     and then applying Bellman-style recurrence
 
-    :param tau_list: list of trajectories used to fit
+    :param data: dataset we are using to fit (should be instance of
+        TauListDataset)
     :param pi: policy we are fitting q function for
         (should be a function that can take as input a pytorch batch of
         states and actions, and return a corresponding batch of action
@@ -41,13 +42,13 @@ def fit_q_tabular(tau_list, pi, gamma, max_num_q_iter=100000,
     observed_reward_lists = defaultdict(list)
     observed_successor_freqs = defaultdict(lambda: torch.zeros(num_s))
     state_count = torch.zeros(num_s)
-    for s, a, ss, r in tau_list:
-        for i in range(len(s)):
-            key = (int(s[i]), int(a[i]))
-            observed_reward_lists[key].append(float(r[i]))
-            observed_successor_freqs[key][int(ss[i])] += 1
-            state_count[int(s[i])] += 1.0
-        state_count[int(ss[-1])] += 1.0
+    s, a, ss, r = data.s, data.a, data.s_prime, data.r
+    for i in range(len(s)):
+        key = (int(s[i]), int(a[i]))
+        observed_reward_lists[key].append(float(r[i]))
+        observed_successor_freqs[key][int(ss[i])] += 1
+        state_count[int(s[i])] += 1.0
+    state_count[int(ss[-1])] += 1.0
 
     # now aggregate these observed distributions per (s, a) pair to
     # estimate the R and T tables

@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-
+from dataset.tau_list_dataset import TauListDataset
 
 
 class AbstractEnvironment(object):
@@ -51,7 +51,7 @@ class AbstractEnvironment(object):
             a_tensor = torch.LongTensor(actions[burn_in:])
             r_tensor = torch.FloatTensor(rewards[burn_in:])
             tau_list.append((s_tensor, a_tensor, ss_tensor, r_tensor))
-        return tau_list
+        return TauListDataset(tau_list)
 
     def reset(self):
         raise NotImplementedError()

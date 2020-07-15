@@ -1,8 +1,10 @@
+from torch.optim import Adam
 from adversarial_learning.game_objectives import w_game_objective
+from benchmark_methods.erm_w_benchmark import train_w_network_erm
 from dataset.init_state_sampler import DiscreteInitStateSampler, \
     DecodingDiscreteInitStateSampler, CartpoleInitStateSampler
 from adversarial_learning.oadam import OAdam
-from dataset.tau_list_dataset import TauListDataLoader
+from dataset.tau_list_dataset import TauListDataset
 from debug_logging.w_logger import SimpleDiscretePrintWLogger, \
     SimplePrintWLogger
 from environments.cartpole_environment import CartpoleEnvironment
@@ -20,12 +22,12 @@ from utils.torch_utils import load_tensor_from_npy
 
 
 
-def train_w_network(train_tau_list, pi_e, pi_b, num_epochs, batch_size, w, f,
+def train_w_network(train_data, pi_e, pi_b, num_epochs, batch_size, w, f,
                     w_optimizer, f_optimizer, gamma, init_state_sampler,
-                    val_tau_list=None, val_freq=10, logger=None):
+                    val_data=None, val_freq=10, logger=None):
     """
-    :param train_tau_list: list of trajectories logged from behavior policy
-        to use for training
+    :param train_data: dataset logged from behavior policy used for training
+        (should be instance of TauListDataset)
     :param pi_e: evaluation policy (should be from policies module)
     :param pi_b: behavior policy (should be from policies module)
     :param num_epochs: number of epochs to perform training for
@@ -38,7 +40,8 @@ def train_w_network(train_tau_list, pi_e, pi_b, num_epochs, batch_size, w, f,
     :param init_state_sampler: should subclass AbstractInitStateSampler,
         used for sampling states at t=0 or computing/estimating expectations
         w.r.t. this distribution
-    :param val_tau_list: (optional) list of validation trajectories for logging
+    :param val_data: (optional) additional dataset logged from behavior policy
+        used for logging (should be instance of TauListDataset)
     :param val_freq: frequency of how often we perform validation logging (only
         if logger object is provided)
     :param logger: (optional) logger object (should be subclass of
@@ -46,11 +49,11 @@ def train_w_network(train_tau_list, pi_e, pi_b, num_epochs, batch_size, w, f,
     :return: None
     """
     assert isinstance(f, WAdversaryWrapper)
-    train_data_loader = TauListDataLoader(tau_list=train_tau_list,
-                                          batch_size=batch_size)
-    if val_tau_list:
-        val_data_loader = TauListDataLoader(tau_list=val_tau_list,
-                                            batch_size=batch_size)
+    assert isinstance(train_data, TauListDataset)
+    train_data_loader = train_data.get_data_loader(batch_size)
+    if val_data:
+        assert isinstance(val_data, TauListDataset)
+        val_data_loader = val_data.get_data_loader(batch_size)
     else:
         val_data_loader = None
 
@@ -76,8 +79,8 @@ def train_w_network(train_tau_list, pi_e, pi_b, num_epochs, batch_size, w, f,
 
 def debug():
     # set up environment and policies
-    # env = TaxiEnvironment()
-    env = CartpoleEnvironment()
+    env = TaxiEnvironment(discrete_state=False)
+    # env = CartpoleEnvironment()
     gamma = 0.98
     alpha = 0.6
     temp = 2.0
@@ -86,23 +89,23 @@ def debug():
     # pi_e = load_taxi_policy("taxi_data/saved_policies/pi19.npy")
     # pi_s = load_taxi_policy("taxi_data/saved_policies/pi3.npy")
     # pi_b = MixtureDiscretePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
-    # pi_e = load_taxi_policy_continuous("taxi_data/saved_policies/pi19.npy", env)
-    # pi_s = load_taxi_policy_continuous("taxi_data/saved_policies/pi3.npy", env)
-    # pi_b = GenericMixturePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
-    pi_e = load_cartpole_policy("logs/cartpole_best.pt", temp, state_dim,
-                                hidden_dim, env.num_a)
-    pi_other = load_cartpole_policy("logs/cartpole_210_318.0.pt", temp,
-                                    state_dim, hidden_dim, env.num_a)
-    pi_b = GenericMixturePolicy(pi_e, pi_other, alpha)
+    pi_e = load_taxi_policy_continuous("taxi_data/saved_policies/pi19.npy", env)
+    pi_s = load_taxi_policy_continuous("taxi_data/saved_policies/pi3.npy", env)
+    pi_b = GenericMixturePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
+    # pi_e = load_cartpole_policy("logs/cartpole_best.pt", temp, state_dim,
+    #                             hidden_dim, env.num_a)
+    # pi_other = load_cartpole_policy("logs/cartpole_210_318.0.pt", temp,
+    #                                 state_dim, hidden_dim, env.num_a)
+    # pi_b = GenericMixturePolicy(pi_e, pi_other, alpha)
 
     # set up logger
-    oracle_tau_len = 1000000
+    oracle_tau_len = 100000
     init_state_dist_path = "taxi_data/init_state_dist.npy"
-    # init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
+    init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
     # init_state_sampler = DiscreteInitStateSampler(init_state_dist)
-    # init_state_sampler = DecodingDiscreteInitStateSampler(init_state_dist,
-    #                                                       env.decode_state)
-    init_state_sampler = CartpoleInitStateSampler(env)
+    init_state_sampler = DecodingDiscreteInitStateSampler(init_state_dist,
+                                                          env.decode_state)
+    # init_state_sampler = CartpoleInitStateSampler(env)
     # logger = SimpleDiscretePrintWLogger(env=env, pi_e=pi_e, pi_b=pi_b,
     #                                     gamma=gamma,
     #                                     oracle_tau_len=oracle_tau_len)
@@ -112,30 +115,37 @@ def debug():
     # generate train, val, and test data
     tau_len = 200000
     burn_in = 100000
-    train_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
-                                           burn_in=burn_in)
-    val_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
-                                         burn_in=burn_in)
-    test_tau_list = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
-                                          burn_in=burn_in)
+    train_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
+                                       burn_in=burn_in)
+    val_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
+                                     burn_in=burn_in)
+    test_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
+                                      burn_in=burn_in)
 
     # define networks and optimizers
-    w = StateEmbeddingModel(num_s=env.num_s, num_out=1)
-    f = WAdversaryWrapper(StateEmbeddingModel(num_s=env.num_s, num_out=1))
-    # w = TaxiSimpleCNN(num_out=1)
-    # f = WAdversaryWrapper(TaxiSimpleCNN(num_out=1))
-    w_lr = 1e-3
+    # w = StateEmbeddingModel(num_s=env.num_s, num_out=1)
+    # f = WAdversaryWrapper(StateEmbeddingModel(num_s=env.num_s, num_out=1))
+    w = TaxiSimpleCNN(num_out=1)
+    f = WAdversaryWrapper(TaxiSimpleCNN(num_out=1))
+    w_lr_pre = 1e-4
+    w_lr = 1e-6
+    w_optimizer_pre = Adam(w.parameters(), lr=w_lr_pre, betas=(0.5, 0.9))
     w_optimizer = OAdam(w.parameters(), lr=w_lr, betas=(0.5, 0.9))
-    f_optimizer = OAdam(f.parameters(), lr=w_lr*5, betas=(0.5, 0.9))
+    f_optimizer = OAdam(f.parameters(), lr=w_lr*500, betas=(0.5, 0.9))
 
-    train_w_network(train_tau_list=train_tau_list, pi_e=pi_e, pi_b=pi_b,
+    train_w_network_erm(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
+                        num_epochs=50, batch_size=1024, w=w,
+                        w_optimizer=w_optimizer_pre, gamma=gamma,
+                        val_data=val_data, val_freq=10, logger=logger)
+    train_w_network(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
                     num_epochs=1000, batch_size=1024, w=w, f=f,
                     w_optimizer=w_optimizer, f_optimizer=f_optimizer,
                     gamma=gamma, init_state_sampler=init_state_sampler,
-                    val_tau_list=val_tau_list, val_freq=10, logger=logger)
+                    val_data=val_data, val_freq=10, logger=logger)
 
     # calculate final performance
-    policy_val_est = w_estimator(tau_list_data_loader=test_tau_list,
+    test_data_loader = test_data.get_data_loader(1024)
+    policy_val_est = w_estimator(tau_list_data_loader=test_data_loader,
                                  pi_e=pi_e, pi_b=pi_b, w=w)
     policy_val_oracle = on_policy_estimate(env=env, pi_e=pi_e, gamma=gamma,
                                            num_tau=1, tau_len=1000000)

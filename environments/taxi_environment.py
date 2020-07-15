@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from dataset.tau_list_dataset import TauListDataset
 from environments.abstract_environment import AbstractEnvironment
 from policies.debug_policies import RandomPolicy
 
@@ -206,24 +207,15 @@ class TaxiEnvironment(AbstractEnvironment):
 
 
 def debug():
-    env = TaxiEnvironment(discrete_state=True)
-    pi = RandomPolicy(num_a=env.num_a, state_rank=3)
-    tau_list = env.generate_roll_out(pi=pi, num_tau=1, tau_len=10)
-    s, a, s_prime, r = tau_list[0]
-    print("states:")
-    print(s_prime)
-    print("decoded states:")
-    print(env.decode_state(s_prime))
-    # print("encoded states one by one:")
-    # for s_ in s_prime:
-    #     print(env.encode_state_tensor(s_))
-    print("encoded decoded states")
-    print(env.encode_state_tensor(env.decode_state(s_prime)))
-    print("encoded decoded states one by one")
-    for s_ in s_prime:
-        s_ = int(s_)
-        print(env.encode_state_tensor(env.decode_state(s_)))
-
+    env = TaxiEnvironment()
+    pi = RandomPolicy(num_a=6, state_rank=0)
+    dataset = env.generate_roll_out(pi=pi, num_tau=2, tau_len=20)
+    print(dataset.s)
+    print(dataset.lens)
+    dataset.save("tmp")
+    dataset_loaded = TauListDataset.load("tmp")
+    print(dataset_loaded.s)
+    print(dataset_loaded.lens)
 
 
 if __name__ == "__main__":
