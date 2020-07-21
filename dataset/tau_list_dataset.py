@@ -6,11 +6,13 @@ from torch.utils.data import Dataset, DataLoader
 class TauListDataset(Dataset):
     def __init__(self, tau_list):
         self.s = torch.cat([s for s, _, _, _ in tau_list])
+#         import pdb;pdb.set_trace()
         self.a = torch.cat([a for _, a, _, _ in tau_list])
         self.s_prime = torch.cat([s for _, _, s, _ in tau_list])
         self.r = torch.cat([r for _, _, _, r in tau_list])
         self.length = len(self.s)
         self.lens = torch.LongTensor([len(s_) for s_, _, _, _ in tau_list])
+        
         assert len(self.a) == self.length
         assert len(self.s_prime) == self.length
         assert len(self.r) == self.length
@@ -49,3 +51,22 @@ class TauListDataset(Dataset):
             s_i = e_i
         return TauListDataset(tau_list)
 
+    
+def restore_dataset_from_load(path, prefix):
+    train_s = torch.load(open(os.path.join(path, prefix+'s.pt'),'rb')).unsqueeze(1)
+    train_a = torch.load(open(os.path.join(path, prefix+'a.pt'),'rb')).unsqueeze(-1)
+    train_s_prime = torch.load(open(os.path.join(path, prefix+'s_prime.pt'),'rb')).unsqueeze(1)
+    train_r = torch.load(open(os.path.join(path, prefix+'r.pt'),'rb')).unsqueeze(-1)
+    train_data = TauListDataset([*zip(train_s, train_a, train_s_prime, train_r)])
+    return train_data
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        

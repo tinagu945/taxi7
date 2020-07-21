@@ -101,8 +101,8 @@ class CartpoleInitStateSampler(GenericInitStateSampler):
         assert isinstance(env, CartpoleEnvironment)
         self.low = -0.05
         self.high= 0.05
-        sampler = lambda b_: env.gym_env.np_random_uniform(
-            low=self.low, high=self.high, size=(b_, 4))
+        sampler = lambda b_: torch.Tensor(env.gym_env.np_random.uniform(
+            low=self.low, high=self.high, size=(b_, env.state_dim)))
         GenericInitStateSampler.__init__(
             self, sampler=sampler,
             expectation_sample_size=expectation_sample_size)

@@ -23,7 +23,7 @@ class AbstractEnvironment(object):
             (1 - gamma) we reset to an initial state
         :return:
         """
-        tau_list = []
+        self.tau_list = []
         for _ in range(num_tau):
             states = []
             actions = []
@@ -50,8 +50,8 @@ class AbstractEnvironment(object):
                 ss_tensor = torch.stack(successor_states[burn_in:])
             a_tensor = torch.LongTensor(actions[burn_in:])
             r_tensor = torch.FloatTensor(rewards[burn_in:])
-            tau_list.append((s_tensor, a_tensor, ss_tensor, r_tensor))
-        return TauListDataset(tau_list)
+            self.tau_list.append((s_tensor, a_tensor, ss_tensor, r_tensor))
+        return TauListDataset(self.tau_list)
 
     def reset(self):
         raise NotImplementedError()

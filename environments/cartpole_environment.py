@@ -11,6 +11,7 @@ class CartpoleEnvironment(AbstractEnvironment):
         super().__init__(num_s=float("inf"), num_a=2, is_s_discrete=False)
         self.gym_env.reset()
         self.at_trajectory_end = False
+        self.state_dim=4
         
     def reset(self):
         s = torch.from_numpy(self.gym_env.reset()).float()

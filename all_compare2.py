@@ -261,6 +261,7 @@ def on_policy(SASR, gamma):
     return total_reward / self_normalizer
 
 def importance_sampling_estimator(SASR, policy0, policy1, gamma):
+    """Accumulate pi_e rewards as usual, then weigh the total reward in the end"""
     mean_est_reward = 0.0
     for sasr in SASR:
         log_trajectory_ratio = 0.0
@@ -278,6 +279,7 @@ def importance_sampling_estimator(SASR, policy0, policy1, gamma):
     return mean_est_reward
 
 def importance_sampling_estimator_stepwise(SASR, policy0, policy1, gamma):
+    """Weigh the rewards by density ratio every step"""
     mean_est_reward = 0.0
     for sasr in SASR:
         step_log_pr = 0.0
@@ -315,6 +317,7 @@ def double_importance_sampling_estimator(SASR, policy0, policy1, gamma, q_table,
 
 
 def weighted_importance_sampling_estimator(SASR, policy0, policy1, gamma):
+    """importance_sampling_estimator weighted by rho in the end. Why?""" 
     total_rho = 0.0
     est_reward = 0.0
     for sasr in SASR:

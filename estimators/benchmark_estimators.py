@@ -1,3 +1,4 @@
+import os
 import torch
 import numpy as np
 from environments.abstract_environment import AbstractEnvironment
@@ -15,7 +16,7 @@ def naive_reward_average_estimate(tau_list):
     return reward_tensor.mean()
 
 
-def on_policy_estimate(env, pi_e, gamma, num_tau, tau_len):
+def on_policy_estimate(env, pi_e, gamma, num_tau, tau_len, load_path=None):
     """
     perform an on-policy estimate of pi_e by actually rolling out data using
     this evaluation policy
@@ -30,6 +31,10 @@ def on_policy_estimate(env, pi_e, gamma, num_tau, tau_len):
     :return: on-policy estimate from tau_list discounted by gamma
     """
     assert isinstance(env, AbstractEnvironment)
-    data = env.generate_roll_out(pi=pi_e, num_tau=num_tau,
-                                 tau_len=tau_len, gamma=gamma)
-    return float(data.r.mean())
+    if load_path:
+        r = torch.load(open(os.path.join(load_path, 'r.pt'),'rb'))
+    else:
+        data = env.generate_roll_out(pi=pi_e, num_tau=num_tau,
+                                     tau_len=tau_len, gamma=gamma)
+        r = data.r
+    return float(r.mean())

@@ -1,11 +1,14 @@
 import random
-
+import torch
+import os
 from adversarial_learning.game_objectives import w_game_objective
 from dataset.init_state_sampler import AbstractInitStateSampler
 from benchmark_methods.discrete_w_oracle_benchmark import \
     calculate_tabular_w_oracle
 from estimators.benchmark_estimators import on_policy_estimate
-from estimators.infinite_horizon_estimators import w_estimator
+from estimators.infinite_horizon_estimators import w_estimator, w_estimator_continuous
+from benchmark_methods.continuous_w_oracle_benchmark import \
+    load_continuous_w_oracle
 
 
 class AbstractWLogger(object):
@@ -33,19 +36,26 @@ class AbstractWLogger(object):
 
 
 class SimplePrintWLogger(AbstractWLogger):
-    def __init__(self, env, pi_e, pi_b, gamma, oracle_tau_len=1000000):
+    def __init__(self, env, pi_e, pi_b, gamma, oracle_tau_len=1000000, load_path=None):
         AbstractWLogger.__init__(self, env, pi_e, pi_b, gamma)
-
-        # estimate oracle W vector
-        pi_e_data = self.env.generate_roll_out(
-            pi=self.pi_e, num_tau=1, tau_len=oracle_tau_len, gamma=gamma)
+        
         sample_idx = list(range(oracle_tau_len))
         random.shuffle(sample_idx)
-        self.s_sample = pi_e_data.s[sample_idx[:5]]
-
-        # calculate oracle estimate of policy value that will be compared
-        # against during validation
-        self.policy_val_oracle = float(pi_e_data.r.mean())
+        
+        if load_path:
+            s_e = torch.load(open(os.path.join(load_path, 's.pt'),'rb'))
+            self.s_sample = s_e[sample_idx[:5]]
+            r_e = torch.load(open(os.path.join(load_path, 'r.pt'),'rb'))
+            self.policy_val_oracle = float(r_e.mean())
+            
+        else:
+            # estimate oracle W vector
+            pi_e_data = self.env.generate_roll_out(
+                pi=self.pi_e, num_tau=1, tau_len=oracle_tau_len, gamma=gamma)
+            self.s_sample = pi_e_data.s[sample_idx[:5]]
+            # calculate oracle estimate of policy value that will be compared
+            # against during validation
+            self.policy_val_oracle = float(pi_e_data.r.mean())
 
     def log(self, train_data_loader, val_data_loader, w, f, init_state_sampler,
             epoch):
@@ -180,3 +190,105 @@ class SimpleDiscretePrintWLogger(SimplePrintWLogger):
             print("%s policy value estimate squared error: %f"
                   % (which, square_error))
         print("")
+        
+        
+        
+class TensorboardContinuousPrintWLogger(SimplePrintWLogger):
+    def __init__(self, env, pi_e, pi_b, gamma, hidden_dim, tensorboard_folder='logs', \
+                 oracle_path='./continuous_w_oracle.pt', oracle_tau_len=1000000, load_path='tau_e_cartpole/'):
+        from torch.utils.tensorboard import SummaryWriter
+        SimplePrintWLogger.__init__(self, env, pi_e, pi_b, gamma,
+                                    oracle_tau_len=oracle_tau_len, load_path=load_path)
+
+        # estimate oracle W vector
+        self.w_oracle = load_continuous_w_oracle(env, hidden_dim, oracle_path)
+        self.writer = SummaryWriter(tensorboard_folder)
+        
+    def log(self, train_data_loader, val_data_loader, w, f, init_state_sampler,
+            epoch):
+        assert isinstance(init_state_sampler, AbstractInitStateSampler)
+        print("Validation results for epoch %d" % epoch)
+
+        # print W function on the fixed sample
+        print("W sample values:", w(self.s_sample).view(-1).detach())
+
+        for which, data_loader in (("Train", train_data_loader),
+                                   ("Val", val_data_loader)):
+            # calculate mean game objective
+            obj_total = 0.0
+            obj_norm = 0.0
+            for s, a, s_prime, _ in data_loader:
+                batch_size = len(s)
+                s_0 = init_state_sampler.get_sample(batch_size)
+                _, neg_obj = w_game_objective(w=w, f=f, s=s, a=a,
+                                              s_prime=s_prime, pi_b=self.pi_b,
+                                              pi_e=self.pi_e, s_0=s_0,
+                                              gamma=self.gamma)
+                obj_total += float(-neg_obj) * len(s)
+                obj_norm += len(s)
+            mean_obj = obj_total / obj_norm
+            print("%s mean objective: %f" % (which, mean_obj))
+
+            # calculate error in W
+            w_err_total = 0.0
+            w_err_norm = 0.0
+            for s, a, s_prime, _ in data_loader:
+                w_pred = w(s).view(-1)
+                b_prob = self.w_oracle(s).softmax(-1)[:,-1]
+                w_true = (1-b_prob)/b_prob
+                w_err_total += ((w_pred - w_true) ** 2).sum()
+                w_err_norm += len(s)
+            w_rmse = float((w_err_total / w_err_norm) ** 0.5)
+            print("%s W RMSE: %f" % (which, w_rmse))
+
+            # estimate policy value
+            policy_val_estimate = w_estimator(
+                tau_list_data_loader=data_loader, pi_e=self.pi_e,
+                pi_b=self.pi_b, w=w)
+            square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
+            print("%s policy value estimate squared error: %f"
+                  % (which, square_error))
+            
+            
+            self.writer.add_scalar('mean_obj_'+which, mean_obj, epoch) 
+            self.writer.add_scalar('W_RMSE_'+which, w_rmse, epoch) 
+            self.writer.add_scalar('policy_sqrterr_'+which, square_error, epoch) 
+        
+        print("")
+
+        
+    def log_benchmark(self, train_data_loader, val_data_loader, w, epoch):
+        print("Benchmark validation results for epoch %d" % epoch)
+
+        # print W function on the fixed sample
+        print("W sample values:", w(self.s_sample).view(-1).detach())
+
+        for which, data_loader in (("Train", train_data_loader),
+                                   ("Val", val_data_loader)):
+            # calculate error in W
+            w_err_total = 0.0
+            w_err_norm = 0.0
+            for s, a, s_prime, _ in data_loader:
+                w_pred = w(s).view(-1)
+                b_prob = self.w_oracle(s).softmax(-1)[:,-1]
+                w_true = (1-b_prob)/b_prob
+                w_err_total += ((w_pred - w_true) ** 2).sum()
+                w_err_norm += len(s)
+            w_rmse = float((w_err_total / w_err_norm) ** 0.5)
+            print("%s W RMSE: %f" % (which, w_rmse))
+
+            # estimate policy value
+            policy_val_estimate = w_estimator_continuous(
+                tau_list_data_loader=data_loader, pi_e=self.pi_e,
+                pi_b=self.pi_b, w=w)
+            square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
+            print("%s policy value estimate squared error: %f"
+                  % (which, square_error))
+            
+            self.writer.add_scalar('benchmark_W_RMSE_'+which, w_rmse, epoch) 
+            self.writer.add_scalar('benchmark_policy_sqrterr_'+which, square_error, epoch) 
+            
+        print("")
+        
+        
+        

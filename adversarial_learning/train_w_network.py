@@ -92,12 +92,7 @@ def debug():
     pi_e = load_taxi_policy_continuous("taxi_data/saved_policies/pi19.npy", env)
     pi_s = load_taxi_policy_continuous("taxi_data/saved_policies/pi3.npy", env)
     pi_b = GenericMixturePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
-    # pi_e = load_cartpole_policy("logs/cartpole_best.pt", temp, state_dim,
-    #                             hidden_dim, env.num_a)
-    # pi_other = load_cartpole_policy("logs/cartpole_210_318.0.pt", temp,
-    #                                 state_dim, hidden_dim, env.num_a)
-    # pi_b = GenericMixturePolicy(pi_e, pi_other, alpha)
-
+    
     # set up logger
     oracle_tau_len = 100000
     init_state_dist_path = "taxi_data/init_state_dist.npy"
