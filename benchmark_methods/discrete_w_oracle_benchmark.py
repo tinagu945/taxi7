@@ -13,6 +13,8 @@ def calculate_tabular_w_oracle(env, pi_b, pi_e, gamma, num_s,
     :param burn_in: burn-in period for monte-carlo sampling
     :return:
     """
+    # tau_len = 1
+    # burn_in = 1
     tau_list_e = env.generate_roll_out(pi=pi_e, num_tau=1, tau_len=tau_len,
                                        gamma=gamma, burn_in=burn_in)
     s_e = tau_list_e[0][0]
@@ -26,4 +28,3 @@ def calculate_tabular_w_oracle(env, pi_b, pi_e, gamma, num_s,
         freq_b = float((s_b == i).sum())
         w[i] = freq_e / freq_b if freq_b > 0 else 1.0
     return w
-

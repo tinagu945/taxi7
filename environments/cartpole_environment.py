@@ -11,8 +11,8 @@ class CartpoleEnvironment(AbstractEnvironment):
         super().__init__(num_s=float("inf"), num_a=2, is_s_discrete=False)
         self.gym_env.reset()
         self.at_trajectory_end = False
-        self.state_dim=4
-        
+        self.state_dim = 4
+
     def reset(self):
         s = torch.from_numpy(self.gym_env.reset()).float()
         return s
@@ -21,7 +21,8 @@ class CartpoleEnvironment(AbstractEnvironment):
         next_state, reward, done, _ = self.gym_env.step(action)
         if done:
             next_state = self.gym_env.reset()
-        return torch.from_numpy(next_state).float(), reward
+            reward = -100000.0
+        return torch.from_numpy(next_state).float(), reward, done
 
 
 def debug():
@@ -33,7 +34,6 @@ def debug():
     print(a.shape)
     print(s_prime.shape)
     print(r.shape)
-
 
 
 if __name__ == "__main__":

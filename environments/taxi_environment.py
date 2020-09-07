@@ -12,7 +12,6 @@ LEFT_ACTION = 3
 
 class TaxiEnvironment(AbstractEnvironment):
     def __init__(self, grid_length=5, discrete_state=True):
-        self.n_state = 0
         self.n_action = 6
         self.grid_length = grid_length
         self.n_state = (grid_length ** 2) * 16 * 5
@@ -175,7 +174,7 @@ class TaxiEnvironment(AbstractEnvironment):
             for i in range(4):
                 x, y = self.possible_passenger_loc[i]
                 if x == self.x and y == self.y and (
-                    self.passenger_status & (1 << i)):
+                        self.passenger_status & (1 << i)):
                     # successfully pick up
                     self.passenger_status -= 1 << i
                     self.taxi_status = np.random.randint(4)
@@ -190,9 +189,9 @@ class TaxiEnvironment(AbstractEnvironment):
                 self.taxi_status = 4
         self._change_passenger_status()
         if self.discrete_state:
-            return self._state_encoding(), reward
+            return self._state_encoding(), reward, False  # never "done"
         else:
-            return self._state_tensor(), reward
+            return self._state_tensor(), reward, False  # never "done"
 
     def _change_passenger_status(self):
         p_generate = [0.3, 0.05, 0.1, 0.2]

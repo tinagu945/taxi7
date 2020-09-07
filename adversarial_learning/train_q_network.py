@@ -11,7 +11,7 @@ from models.discrete_models import StateEmbeddingModel
 from policies.mixture_policies import MixtureDiscretePolicy
 from policies.taxi_policies import load_taxi_policy
 from utils.torch_utils import load_tensor_from_npy
-from debug_logging.q_logger import SimplePrintQLogger
+from debug_logging.q_logger import DiscreteQLogger
 
 
 def train_q_network(train_data, pi_e, num_epochs, batch_size, q,
@@ -45,11 +45,13 @@ def train_q_network(train_data, pi_e, num_epochs, batch_size, q,
         val_data_loader = None
 
     for epoch in range(num_epochs):
+        print(epoch)
         if logger and epoch % val_freq == 0:
             logger.log(train_data_loader, val_data_loader, q, f, epoch)
 
         for s, a, s_prime, r in train_data_loader:
-            q_obj, f_obj = q_game_objective(q, f, s, a, s_prime, r, pi_e, gamma)
+            q_obj, f_obj = q_game_objective(
+                q, f, s, a, s_prime, r, pi_e, gamma)
 
             f_optimizer.zero_grad()
             f_obj.backward(retain_graph=True)
@@ -73,8 +75,8 @@ def debug():
     init_state_dist_path = "taxi_data/init_state_dist.npy"
     init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
     init_state_sampler = DiscreteInitStateSampler(init_state_dist)
-    logger = SimplePrintQLogger(env=env, pi_e=pi_e, gamma=gamma,
-                                init_state_sampler=init_state_sampler)
+    logger = DiscreteQLogger(env=env, pi_e=pi_e, gamma=gamma, tensorboard=True,
+                             save_model=True, init_state_sampler=init_state_sampler)
     # generate train and val data
     train_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=200000,
                                        burn_in=100000)
@@ -112,4 +114,3 @@ def debug():
 
 if __name__ == "__main__":
     debug()
-

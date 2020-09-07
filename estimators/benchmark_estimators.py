@@ -16,11 +16,10 @@ def naive_reward_average_estimate(tau_list):
     return reward_tensor.mean()
 
 
-def on_policy_estimate(env, pi_e, gamma, num_tau, tau_len, load_path=None):
+def on_policy_estimate(env, pi_e, gamma, num_tau, tau_len):
     """
     perform an on-policy estimate of pi_e by actually rolling out data using
     this evaluation policy
-
     :param env: environment to sample data from
         (should subclass AbstractEnvironment)
     :param pi_e: policy to evaluate (should be a policy from the
@@ -31,10 +30,61 @@ def on_policy_estimate(env, pi_e, gamma, num_tau, tau_len, load_path=None):
     :return: on-policy estimate from tau_list discounted by gamma
     """
     assert isinstance(env, AbstractEnvironment)
-    if load_path:
-        r = torch.load(open(os.path.join(load_path, 'r.pt'),'rb'))
-    else:
-        data = env.generate_roll_out(pi=pi_e, num_tau=num_tau,
-                                     tau_len=tau_len, gamma=gamma)
-        r = data.r
+    data = env.generate_roll_out(pi=pi_e, num_tau=num_tau,
+                                 tau_len=tau_len, gamma=gamma)
+    r = data.r
     return float(r.mean())
+
+
+def importance_sampling_estimator(SASR, pi_b, pi_e, gamma):
+    mean_est_reward = 0.0
+    for sasr in SASR:
+        log_trajectory_ratio = 0.0
+        total_reward = 0.0
+        discounted_t = 1.0
+        self_normalizer = 0.0
+
+        for s, a, sprime, r in sasr:
+            log_trajectory_ratio += np.log(pi_e(s)[0][a]) - \
+                np.log(pi_b(s)[0][a])
+            total_reward += r * discounted_t
+            self_normalizer += discounted_t
+            discounted_t *= gamma
+        avr_reward = total_reward / self_normalizer
+        mean_est_reward += avr_reward * np.exp(log_trajectory_ratio)
+    mean_est_reward /= len(SASR)
+    return mean_est_reward
+
+
+def importance_sampling_estimator_stepwise(SASR, pi_b, pi_e, gamma):
+    mean_est_reward = 0.0
+    for sasr in SASR:
+        step_log_pr = 0.0
+        est_reward = 0.0
+        discounted_t = 1.0
+        self_normalizer = 0.0
+        for s, a, sprime, r in sasr:
+            step_log_pr += np.log(pi_e(s)[0][a]) - \
+                np.log(pi_b(s)[0][a])
+            est_reward += np.exp(step_log_pr)*r*discounted_t
+            self_normalizer += discounted_t
+            discounted_t *= gamma
+        est_reward /= self_normalizer
+        mean_est_reward += est_reward
+    mean_est_reward /= len(SASR)
+    return mean_est_reward
+
+
+def train_density_ratio(SASR, pi_b, pi_e, den_discrete, gamma):
+    for sasr in SASR:
+        discounted_t = 1.0
+        initial_state = sasr[0][0]
+        for s, a, sprime, r in sasr:
+            discounted_t = gamma
+            policy_ratio = pi_e(s)[0][a]/pi_b(s)[0][a]
+            den_discrete.feed_data(
+                s, sprime, initial_state, policy_ratio, discounted_t)
+        # den_discrete.feed_data(-1, initial_state, initial_state, 1, discounted_t)
+
+    x, w = den_discrete.density_ratio_estimate()
+    return x, w

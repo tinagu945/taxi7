@@ -33,6 +33,29 @@ def linear_solver(n, M):
 
 
 def quadratic_solver(n, M, bbb ,tvalid, regularizer):
+    """
+    From quadprog doc:
+    Solve a strictly convex quadratic program
+
+    Minimize     1/2 x^T G x - a^T x
+    Subject to   C.T x >= b
+    
+    G : array, shape=(n, n)
+        matrix appearing in the quadratic function to be minimized
+    a : array, shape=(n,)
+        vector appearing in the quadratic function to be minimized
+    C : array, shape=(n, m)
+        matrix defining the constraints under which we want to minimize the
+        quadratic function
+    b : array, shape=(m), default=None
+        vector defining the constraints
+    meq : int, default=0
+        the first meq constraints are treated as equality constraints,
+        all further as inequality constraints (defaults to 0).
+    factorized : bool, default=False
+        If True, then we are passing :math:`R^{−1}` (where :math:`G = R^T R`)
+        instead of the matrix G in the argument G.
+    """
     qp_G = np.matmul(M.T, M)
     qp_G += regularizer * np.eye(n)
 

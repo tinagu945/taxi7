@@ -37,7 +37,7 @@ class AbstractEnvironment(object):
                 p = np.array(pi(s))
                 p = p / p.sum()
                 a = np.random.choice(list(range(self.num_a)), p=p)
-                s_prime, r = self.step(a)
+                s_prime, r, done = self.step(a)
                 states.append(s)
                 actions.append(a)
                 rewards.append(r)
@@ -58,4 +58,3 @@ class AbstractEnvironment(object):
 
     def step(self, a):
         raise NotImplementedError()
-

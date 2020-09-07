@@ -5,8 +5,7 @@ from dataset.init_state_sampler import DiscreteInitStateSampler, \
     DecodingDiscreteInitStateSampler, CartpoleInitStateSampler
 from adversarial_learning.oadam import OAdam
 from dataset.tau_list_dataset import TauListDataset
-from debug_logging.w_logger import SimpleDiscretePrintWLogger, \
-    SimplePrintWLogger
+from debug_logging.w_logger import DiscreteWLogger
 from environments.cartpole_environment import CartpoleEnvironment
 from environments.taxi_environment import TaxiEnvironment
 from estimators.benchmark_estimators import on_policy_estimate
@@ -19,7 +18,6 @@ from policies.mixture_policies import GenericMixturePolicy, \
     MixtureDiscretePolicy
 from policies.taxi_policies import load_taxi_policy_continuous, load_taxi_policy
 from utils.torch_utils import load_tensor_from_npy
-
 
 
 def train_w_network(train_data, pi_e, pi_b, num_epochs, batch_size, w, f,
@@ -79,49 +77,53 @@ def train_w_network(train_data, pi_e, pi_b, num_epochs, batch_size, w, f,
 
 def debug():
     # set up environment and policies
-    env = TaxiEnvironment(discrete_state=False)
+    env = TaxiEnvironment(discrete_state=True)
     # env = CartpoleEnvironment()
     gamma = 0.98
     alpha = 0.6
     temp = 2.0
     hidden_dim = 50
     state_dim = 4
-    # pi_e = load_taxi_policy("taxi_data/saved_policies/pi19.npy")
-    # pi_s = load_taxi_policy("taxi_data/saved_policies/pi3.npy")
-    # pi_b = MixtureDiscretePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
-    pi_e = load_taxi_policy_continuous("taxi_data/saved_policies/pi19.npy", env)
-    pi_s = load_taxi_policy_continuous("taxi_data/saved_policies/pi3.npy", env)
-    pi_b = GenericMixturePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
-    
+    pi_e = load_taxi_policy("taxi_data/saved_policies/pi19.npy")
+    pi_s = load_taxi_policy("taxi_data/saved_policies/pi3.npy")
+    pi_b = MixtureDiscretePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
+    # pi_e = load_taxi_policy_continuous(
+    #     "taxi_data/saved_policies/pi19.npy", env)
+    # pi_s = load_taxi_policy_continuous("taxi_data/saved_policies/pi3.npy", env)
+    # pi_b = GenericMixturePolicy(pi_1=pi_e, pi_2=pi_s, pi_1_weight=alpha)
+
     # set up logger
-    oracle_tau_len = 100000
+    oracle_tau_len = 100000  # // 10000
     init_state_dist_path = "taxi_data/init_state_dist.npy"
     init_state_dist = load_tensor_from_npy(init_state_dist_path).view(-1)
-    # init_state_sampler = DiscreteInitStateSampler(init_state_dist)
-    init_state_sampler = DecodingDiscreteInitStateSampler(init_state_dist,
-                                                          env.decode_state)
+    init_state_sampler = DiscreteInitStateSampler(init_state_dist)
+    # init_state_sampler = DecodingDiscreteInitStateSampler(init_state_dist,
+    #                                                       env.decode_state)
     # init_state_sampler = CartpoleInitStateSampler(env)
     # logger = SimpleDiscretePrintWLogger(env=env, pi_e=pi_e, pi_b=pi_b,
     #                                     gamma=gamma,
     #                                     oracle_tau_len=oracle_tau_len)
-    logger = SimplePrintWLogger(env=env, pi_e=pi_e, pi_b=pi_b, gamma=gamma,
-                                oracle_tau_len=oracle_tau_len)
+    logger = DiscreteWLogger(env=env, pi_e=pi_e, pi_b=pi_b, gamma=gamma,
+                             tensorboard=True, save_model=True, oracle_tau_len=oracle_tau_len)
 
     # generate train, val, and test data
-    tau_len = 200000
-    burn_in = 100000
+    tau_len = 200000  # // 10000
+    burn_in = 100000  # // 10000
     train_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
                                        burn_in=burn_in)
+    print('finish train')
     val_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
                                      burn_in=burn_in)
+    print('finish val')
     test_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
                                       burn_in=burn_in)
+    print('finish test')
 
     # define networks and optimizers
-    # w = StateEmbeddingModel(num_s=env.num_s, num_out=1)
-    # f = WAdversaryWrapper(StateEmbeddingModel(num_s=env.num_s, num_out=1))
-    w = TaxiSimpleCNN(num_out=1)
-    f = WAdversaryWrapper(TaxiSimpleCNN(num_out=1))
+    w = StateEmbeddingModel(num_s=env.num_s, num_out=1)
+    f = WAdversaryWrapper(StateEmbeddingModel(num_s=env.num_s, num_out=1))
+    # w = TaxiSimpleCNN(num_out=1)
+    # f = WAdversaryWrapper(TaxiSimpleCNN(num_out=1))
     w_lr_pre = 1e-4
     w_lr = 1e-6
     w_optimizer_pre = Adam(w.parameters(), lr=w_lr_pre, betas=(0.5, 0.9))
@@ -133,7 +135,7 @@ def debug():
                         w_optimizer=w_optimizer_pre, gamma=gamma,
                         val_data=val_data, val_freq=10, logger=logger)
     train_w_network(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
-                    num_epochs=1000, batch_size=1024, w=w, f=f,
+                    num_epochs=5000, batch_size=1024, w=w, f=f,
                     w_optimizer=w_optimizer, f_optimizer=f_optimizer,
                     gamma=gamma, init_state_sampler=init_state_sampler,
                     val_data=val_data, val_freq=10, logger=logger)
@@ -150,4 +152,3 @@ def debug():
 
 if __name__ == "__main__":
     debug()
-

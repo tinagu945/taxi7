@@ -1,7 +1,7 @@
 import torch
 
 from dataset.tau_list_dataset import TauListDataset
-from debug_logging.w_logger import SimpleDiscretePrintWLogger
+from debug_logging.w_logger import DiscreteWLogger
 from environments.taxi_environment import TaxiEnvironment
 from models.discrete_models import StateEmbeddingModel
 from policies.mixture_policies import MixtureDiscretePolicy
@@ -91,9 +91,9 @@ def debug():
 
     # set up logger
     oracle_tau_len = 1000000
-    logger = SimpleDiscretePrintWLogger(env=env, pi_e=pi_e, pi_b=pi_b,
-                                        gamma=gamma,
-                                        oracle_tau_len=oracle_tau_len)
+    logger = DiscreteWLogger(env=env, pi_e=pi_e, pi_b=pi_b,
+                             gamma=gamma, tensorboard=False, save_model=False,
+                             oracle_tau_len=oracle_tau_len)
 
     # generate train, val, and test data
     tau_len = 200000

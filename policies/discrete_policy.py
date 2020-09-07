@@ -12,6 +12,7 @@ class DiscretePolicy(object):
     only relevant for tabular settings where states are integers,
     and is essentially just a wrapper around a simple array of policy probs
     """
+
     def __init__(self, policy_probs):
         """
         :param policy_probs: numpy array or pytorch tensor containing policy
@@ -37,6 +38,7 @@ class EncodingDiscretePolicy(DiscretePolicy):
     discrete encoding (e.g. for Taxi environment when we represent state
     via image-style tensor)
     """
+
     def __init__(self, policy_probs, encoder):
         """
         :param policy_probs: numpy array or pytorch tensor containing policy
@@ -51,4 +53,3 @@ class EncodingDiscretePolicy(DiscretePolicy):
     def __call__(self, s):
         s_encoded = self.encoder(s)
         return DiscretePolicy.__call__(self, s_encoded)
-
