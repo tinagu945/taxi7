@@ -8,21 +8,21 @@ from benchmark_methods.discrete_w_oracle_benchmark import \
     calculate_tabular_w_oracle
 # from estimators.benchmark_estimators import _estimateon_policy
 from estimators.infinite_horizon_estimators import w_estimator
-from models.continuous_models import \
-    load_continuous_w_oracle
+from models.continuous_models import WOracleModel
+from torch.utils.tensorboard import SummaryWriter
 
 
 class AbstractWLogger(object):
-    def __init__(self, env, pi_e, pi_b, gamma, save_model):
+    def __init__(self, env, pi_e, pi_b, gamma, save_model, log_path=None):
         self.env = env
         self.pi_e = pi_e
         self.pi_b = pi_b
         self.gamma = gamma
         self.save_model = save_model
         if self.save_model:
+            assert log_path, "To save model, you must provide a path."
             self.lowest_err = float('inf')
-            now = datetime.datetime.now()
-            self.path = 'logs/' + str(now.isoformat())
+        self.path = log_path
 
     def log(self, train_data_loader, val_data_loader, w, f,
             init_state_sampler, epoch):
@@ -40,14 +40,14 @@ class AbstractWLogger(object):
         """
         raise NotImplementedError()
 
-    def save_w(self, square_error, w, epoch):
+    def save_w(self, square_error, w, epoch, suffix=''):
         if square_error < self.lowest_err:
             print('New best! ', square_error, epoch)
             self.lowest_err = square_error
-            with open(os.path.join(self.path, 'best_w.pt'), 'wb') as f:
+            with open(os.path.join(self.path, str(epoch)+'_best_w_'+suffix+'.pt'), 'wb') as f:
                 torch.save(w.state_dict(), f)
         else:
-            with open(os.path.join(self.path, str(epoch)+'_w.pt'), 'wb') as f:
+            with open(os.path.join(self.path, str(epoch)+'_w_'+suffix+'.pt'), 'wb') as f:
                 torch.save(w.state_dict(), f)
         print('Model saved in ', self.path)
 
@@ -230,7 +230,8 @@ class ContinuousWLogger(SimplePrintWLogger):
         SimplePrintWLogger.__init__(self, env, pi_e, pi_b, gamma, save_model,
                                     oracle_tau_len=oracle_tau_len, load_path=load_path)
         # estimate oracle W vector
-        self.w_oracle = load_continuous_w_oracle(env, hidden_dim, oracle_path)
+        self.w_oracle = WOracleModel.load_continuous_w_oracle(
+            env, hidden_dim, oracle_path)
         self.tensorboard = tensorboard
         if self.tensorboard:
             # Make sure we create a folder for tensorboard.
@@ -238,7 +239,6 @@ class ContinuousWLogger(SimplePrintWLogger):
                 now = datetime.datetime.now()
                 self.path = 'logs/' + str(now.isoformat())
 
-            from torch.utils.tensorboard import SummaryWriter
             self.writer = SummaryWriter(self.path)
 
     def log(self, train_data_loader, val_data_loader, w, f, init_state_sampler,
@@ -309,4 +309,48 @@ class ContinuousWLogger(SimplePrintWLogger):
                     'benchmark_W_RMSE_'+which, w_rmse, epoch)
                 self.writer.add_scalar(
                     'benchmark_policy_sqrterr_'+which, square_error, epoch)
+        print("")
+
+
+class SimplestWLogger(AbstractWLogger):
+    def __init__(self, env, pi_e, pi_b, gamma, save_model, tensorboard, log_path, oracle_policy_value):
+        AbstractWLogger.__init__(
+            self, env, pi_e, pi_b, gamma, save_model, log_path=log_path)
+        self.tensorboard = tensorboard
+        self.policy_val_oracle = oracle_policy_value
+        self.writer = SummaryWriter(self.path)
+
+    def log_benchmark(self, train_data_loader, val_data_loader, w, epoch):
+        print('[log_benchmark] epoch', epoch)
+        # estimate policy value
+        policy_val_estimate = w_estimator(
+            tau_list_data_loader=train_data_loader, pi_e=self.pi_e,
+            pi_b=self.pi_b, w=w)
+        square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
+        print('[log_benchmark] Policy_val_oracle', self.policy_val_oracle)
+        print("[log_benchmark] Policy value estimate squared error:", square_error)
+        print("")
+
+        if self.tensorboard:
+            self.writer.add_scalar(
+                'benchmark_W_policy_sqrerr', square_error, epoch)
+
+        if self.save_model:
+            self.save_w(square_error, w, epoch, suffix='ERM')
+
+    def log(self, train_data_loader, val_data_loader, w, f, init_state_sampler,
+            epoch):
+        print('epoch', epoch)
+        # estimate policy value
+        policy_val_estimate = w_estimator(
+            tau_list_data_loader=train_data_loader, pi_e=self.pi_e,
+            pi_b=self.pi_b, w=w)
+        square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
+        print('Policy_val_oracle', self.policy_val_oracle)
+        print("Policy value estimate squared error:", square_error)
+
+        if self.tensorboard:
+            self.writer.add_scalar('policy_W_sqrerr', square_error, epoch)
+        if self.save_model:
+            self.save_w(square_error, w, epoch)
         print("")

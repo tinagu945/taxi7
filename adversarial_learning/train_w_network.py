@@ -75,6 +75,29 @@ def train_w_network(train_data, pi_e, pi_b, num_epochs, batch_size, w, f,
                        init_state_sampler, epoch)
 
 
+def train_w_taxi(env, train_data, val_data, pi_e, pi_b, init_state_sampler, logger, gamma, ERM_epoch=50, epoch=10000, w_lr_pre=1e-3,  w_lr=1e-4):
+    # define networks and optimizers
+    w = StateEmbeddingModel(num_s=env.num_s, num_out=1)
+    f = WAdversaryWrapper(StateEmbeddingModel(num_s=env.num_s, num_out=1))
+    # w = TaxiSimpleCNN(num_out=1)
+    # f = WAdversaryWrapper(TaxiSimpleCNN(num_out=1))
+
+    w_optimizer_pre = Adam(w.parameters(), lr=w_lr_pre, betas=(0.5, 0.9))
+    w_optimizer = OAdam(w.parameters(), lr=w_lr, betas=(0.5, 0.9))
+    f_optimizer = OAdam(f.parameters(), lr=w_lr*500, betas=(0.5, 0.9))
+
+    train_w_network_erm(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
+                        num_epochs=ERM_epoch, batch_size=1024, w=w,
+                        w_optimizer=w_optimizer_pre, gamma=gamma,
+                        val_data=val_data, val_freq=10, logger=logger)
+    train_w_network(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
+                    num_epochs=epoch, batch_size=1024, w=w, f=f,
+                    w_optimizer=w_optimizer, f_optimizer=f_optimizer,
+                    gamma=gamma, init_state_sampler=init_state_sampler,
+                    val_data=val_data, val_freq=10, logger=logger)
+    return w
+
+
 def debug():
     # set up environment and policies
     env = TaxiEnvironment(discrete_state=True)
@@ -119,27 +142,8 @@ def debug():
                                       burn_in=burn_in)
     print('finish test')
 
-    # define networks and optimizers
-    w = StateEmbeddingModel(num_s=env.num_s, num_out=1)
-    f = WAdversaryWrapper(StateEmbeddingModel(num_s=env.num_s, num_out=1))
-    # w = TaxiSimpleCNN(num_out=1)
-    # f = WAdversaryWrapper(TaxiSimpleCNN(num_out=1))
-    w_lr_pre = 1e-4
-    w_lr = 1e-6
-    w_optimizer_pre = Adam(w.parameters(), lr=w_lr_pre, betas=(0.5, 0.9))
-    w_optimizer = OAdam(w.parameters(), lr=w_lr, betas=(0.5, 0.9))
-    f_optimizer = OAdam(f.parameters(), lr=w_lr*500, betas=(0.5, 0.9))
-
-    train_w_network_erm(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
-                        num_epochs=50, batch_size=1024, w=w,
-                        w_optimizer=w_optimizer_pre, gamma=gamma,
-                        val_data=val_data, val_freq=10, logger=logger)
-    train_w_network(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
-                    num_epochs=5000, batch_size=1024, w=w, f=f,
-                    w_optimizer=w_optimizer, f_optimizer=f_optimizer,
-                    gamma=gamma, init_state_sampler=init_state_sampler,
-                    val_data=val_data, val_freq=10, logger=logger)
-
+    w = train_w_taxi(env, train_data, val_data, pi_e, pi_b,
+                     init_state_sampler, logger, gamma)
     # calculate final performance
     test_data_loader = test_data.get_data_loader(1024)
     policy_val_est = w_estimator(tau_list_data_loader=test_data_loader,
