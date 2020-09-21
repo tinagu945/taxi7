@@ -6,7 +6,7 @@ from benchmark_methods.erm_w_benchmark import train_w_network_erm
 from dataset.init_state_sampler import CartpoleInitStateSampler
 from adversarial_learning.oadam import OAdam
 from dataset.tau_list_dataset import TauListDataset
-from debug_logging.w_logger import ContinuousWLogger
+from debug_logging.w_logger import ContinuousWLogger, SimplestWLogger
 from environments.cartpole_environment import CartpoleEnvironment
 from estimators.benchmark_estimators import on_policy_estimate
 from estimators.infinite_horizon_estimators import w_estimator
@@ -15,85 +15,125 @@ from models.w_adversary_wrapper import WAdversaryWrapper
 from policies.mixture_policies import GenericMixturePolicy
 from policies.cartpole_policies import load_cartpole_policy
 from train_w_network import train_w_network
+from torch.optim import lr_scheduler
+import argparse
+import datetime
+import sys
+import numpy as np
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--gamma', type=float, default=0.98)
+parser.add_argument('--alpha', type=float, default=0.6)
+parser.add_argument('--temp', type=float, default=2.0)
+parser.add_argument('--w_pre_lr', type=float, default=1e-4)
+parser.add_argument('--w_lr', type=float, default=1e-6)
+parser.add_argument('--f_lr_multiple', type=float, default=500)
+parser.add_argument('--hidden_dim', type=int, default=50)
+parser.add_argument('--lr_decay', type=int, default=np.inf)
+parser.add_argument('--num_tau', type=int, default=1)
+parser.add_argument('--oracle_tau_len', type=int, default=1000000)
+parser.add_argument('--tau_len', type=int, default=200000)
+parser.add_argument('--burn_in', type=int, default=100000)
+parser.add_argument('--ERM_epoch', type=int, default=400)
+parser.add_argument('--GMM_epoch', type=int, default=2000)
+parser.add_argument('--val_freq', type=int, default=10)
+parser.add_argument('--batch_size', type=int, default=1024)
+parser.add_argument('--load_train', action='store_false', default=True)
+parser.add_argument('--no_tensorboard', action='store_false', default=True)
+parser.add_argument('--no_save_model', action='store_false', default=True)
+parser.add_argument('--cuda', action='store_true', default=False)
+# Best reward -99589.0
+parser.add_argument('--pi_other_name', type=str,
+                    default='cartpole_180_-99900.0')
+parser.add_argument('--tau_e_path', type=str, default='tau_e_cartpole')
+parser.add_argument('--tau_b_path', type=str, default='tau_b_cartpole')
+parser.add_argument('--cartpole_weights', type=str, default='cartpole_weights')
+parser.add_argument('--save_folder', type=str, default='logs')
+args = parser.parse_args()
+args.script = 'Wcartpole'
 
 
 def debug():
-    # set up environment and policies
     env = CartpoleEnvironment()
-    gamma = 0.98
-    alpha = 0.6
-    temp = 2.0
-    hidden_dim = 50
-    tau_e_path = 'tau_e_cartpole/'
-    tau_b_path = 'tau_b_cartpole/'
-    cartpole_weights = 'cartpole_weights/'
-    load_train = True
-    pi_other_name = 'cartpole_110_307.0'
+    now = datetime.datetime.now()
+    timestamp = now.isoformat()
+    log_path = '{}/{}/'.format(args.save_folder,
+                               '_'.join([timestamp]+[i.replace("--", "") for i in sys.argv[1:]]+[args.script]))
 
-    pi_e = load_cartpole_policy(os.path.join(cartpole_weights, "cartpole_best.pt"), temp, env.state_dim,
-                                hidden_dim, env.num_a)
-    pi_other = load_cartpole_policy(os.path.join(cartpole_weights, pi_other_name+".pt"), temp,
-                                    env.state_dim, hidden_dim, env.num_a)  # cartpole_210_318.0.pt
-    pi_b = GenericMixturePolicy(pi_e, pi_other, alpha)
-
-    # set up logger
-    oracle_tau_len = 1000000  # //100000
-    # From gym repo, reset(): self.state = self.np_random.uniform(low=-0.05, high=0.05, size=(4,))
+    # set up environment and policies
+    pi_e = load_cartpole_policy(os.path.join(args.cartpole_weights, "cartpole_best.pt"), args.temp, env.state_dim,
+                                args.hidden_dim, env.num_a)
+    pi_other = load_cartpole_policy(os.path.join(args.cartpole_weights, args.pi_other_name+".pt"), args.temp,
+                                    env.state_dim, args.hidden_dim, env.num_a)
+    pi_b = GenericMixturePolicy(pi_e, pi_other, args.alpha)
     init_state_sampler = CartpoleInitStateSampler(env)
     now = datetime.datetime.now()
-    logger = ContinuousWLogger(env=env, pi_e=pi_e, pi_b=pi_b,
-                               gamma=gamma, hidden_dim=hidden_dim, tensorboard=True, save_model=True,
-                               oracle_tau_len=oracle_tau_len, load_path=tau_e_path)
-    if load_train:
-        train_data = TauListDataset.load(tau_b_path, pi_other_name+'_train_')
-        val_data = TauListDataset.load(tau_b_path, pi_other_name+'_val_')
-        test_data = TauListDataset.load(tau_b_path, pi_other_name+'_test_')
-
+    if args.load_train:
+        print('Loading datasets for training...')
+        train_data = TauListDataset.load(
+            args.tau_b_path, prefix=args.pi_other_name+'_train_')
+        val_data = TauListDataset.load(
+            args.tau_b_path, prefix=args.pi_other_name+'_val_')
+        test_data = TauListDataset.load(
+            args.tau_b_path, prefix=args.pi_other_name+'_test_')
+        pi_e_data_discounted = TauListDataset.load(args.tau_e_path)
     else:
         # generate train, val, and test data, very slow so load exisiting data is preferred.
-        tau_len = 200000  # //100000
-        burn_in = 100000  # //100000
-        print('not loading train b data, so generating')
-        train_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
-                                           burn_in=burn_in)
-        print('train done'+pi_other_name+'_train_')
-        val_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
-                                         burn_in=burn_in)
-        print('val done')
-        test_data = env.generate_roll_out(pi=pi_b, num_tau=1, tau_len=tau_len,
-                                          burn_in=burn_in)
-        print('test done')
-        train_data.save(tau_b_path, prefix=pi_other_name+'_train_')
-        val_data.save(tau_b_path, prefix=pi_other_name+'_val_')
-        test_data.save(tau_b_path, prefix=pi_other_name+'_test_')
-        print('all saved!'+pi_other_name)
-    print('Train pi_b policy ', train_data.r.mean())
-    # define networks and optimizers
-    w = WNetworkModel(env.state_dim, hidden_dim)
-    f = WAdversaryWrapper(WNetworkModel(env.state_dim, hidden_dim))
-    w_lr_pre = 1e-5
-    w_lr = 1e-6
-    w_optimizer_pre = Adam(w.parameters(), lr=w_lr_pre, betas=(0.5, 0.9))
-    w_optimizer = OAdam(w.parameters(), lr=w_lr, betas=(0.5, 0.9))
-    f_optimizer = OAdam(f.parameters(), lr=w_lr*500, betas=(0.5, 0.9))
+        # pi_b data is for training so no gamma.
+        print('Not loading pi_b data, so generating')
+        train_data = env.generate_roll_out(pi=pi_b, num_tau=args.num_tau, tau_len=args.tau_len,
+                                           burn_in=args.burn_in)
+        print('Finished generating train data of', args.pi_other_name)
+        val_data = env.generate_roll_out(pi=pi_b, num_tau=args.num_tau, tau_len=args.tau_len,
+                                         burn_in=args.burn_in)
+        print('Finished generating val data of', args.pi_other_name)
+        test_data = env.generate_roll_out(pi=pi_b, num_tau=args.num_tau, tau_len=args.tau_len,
+                                          burn_in=args.burn_in)
+        print('Finished generating test data of', args.pi_other_name)
+        train_data.save(args.tau_b_path, prefix=args.pi_other_name+'_train_')
+        val_data.save(args.tau_b_path, prefix=args.pi_other_name+'_val_')
+        test_data.save(args.tau_b_path, prefix=args.pi_other_name+'_test_')
 
-    # train_w_network_erm(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
-    #                     num_epochs=400, batch_size=1024, w=w,
-    #                     w_optimizer=w_optimizer_pre, gamma=gamma,
-    #                     val_data=val_data, val_freq=10, logger=logger)
+        # pi_e data with gamma is only for calculating oracle policy value, so has the gamma.
+        print('Not loarding pi_e data, so generating')
+        pi_e_data_discounted = env.generate_roll_out(
+            pi=pi_e, num_tau=args.num_tau, tau_len=args.oracle_tau_len, burn_in=args.burn_in, gamma=args.gamma)
+        print('Finished generating data of pi_e with gamma')
+        pi_e_data_discounted.save(args.tau_e_path, prefix='gamma_')
+
+    logger = SimplestWLogger(env, pi_e, pi_b, args.gamma,
+                             True, True, log_path, -40.1)
+    with open(os.path.join(log_path, 'meta.txt'), 'w') as f:
+        print(args, file=f)
+
+    # define networks and optimizers
+    w = WNetworkModel(env.state_dim, args.hidden_dim)
+    f = WAdversaryWrapper(WNetworkModel(env.state_dim, args.hidden_dim))
+    w_optimizer_pre = Adam(w.parameters(), lr=args.w_pre_lr, betas=(0.5, 0.9))
+    w_optimizer = OAdam(w.parameters(), lr=args.w_lr, betas=(0.5, 0.9))
+    f_optimizer = OAdam(f.parameters(), lr=args.w_lr *
+                        args.f_lr_multiple, betas=(0.5, 0.9))
+
+    w_scheduler = lr_scheduler.StepLR(w_optimizer, step_size=args.lr_decay)
+    f_scheduler = lr_scheduler.StepLR(f_optimizer, step_size=args.lr_decay)
+
+    train_w_network_erm(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
+                        num_epochs=args.ERM_epoch, batch_size=args.batch_size, w=w,
+                        w_optimizer=w_optimizer_pre, gamma=args.gamma,
+                        val_data=val_data, val_freq=args.val_freq, logger=logger)
+    print('Finished ERM pretraining.')
     train_w_network(train_data=train_data, pi_e=pi_e, pi_b=pi_b,
-                    num_epochs=2000, batch_size=1024, w=w, f=f,
+                    num_epochs=args.GMM_epoch, batch_size=args.batch_size, w=w, f=f,
                     w_optimizer=w_optimizer, f_optimizer=f_optimizer,
-                    gamma=gamma, init_state_sampler=init_state_sampler,
-                    val_data=val_data, val_freq=10, logger=logger)
+                    gamma=args.gamma, init_state_sampler=init_state_sampler,
+                    val_data=val_data, val_freq=args.val_freq, logger=logger,
+                    w_scheduler=w_scheduler, f_scheduler=f_scheduler)
 
     # calculate final performance
-    test_data_loader = test_data.get_data_loader(1024)
-    policy_val_est = w_estimator(tau_list_data_loader=test_data_loader,
+    policy_val_est = w_estimator(tau_list_data_loader=train_data_loader,
                                  pi_e=pi_e, pi_b=pi_b, w=w)
-    policy_val_oracle = on_policy_estimate(env=env, pi_e=pi_e, gamma=gamma,
-                                           num_tau=1, tau_len=1000000, load_path=tau_e_path)
-    squared_error = (policy_val_est - policy_val_oracle) ** 2
+    squared_error = (policy_val_est - logger.policy_val_oracle) ** 2
     print("Test policy val squared error:", squared_error)
 
 

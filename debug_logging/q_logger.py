@@ -84,7 +84,7 @@ class QLogger(AbstractQLogger):
         # self.s_prime_sample = pi_e_data.s_prime[sample_idx[:5]]
         # self.r_sample = pi_e_data.r[sample_idx[:5]]
         if policy_val_oracle:
-            self.policy_val_oracle = -39.7
+            self.policy_val_oracle = policy_val_oracle
         else:
             self.policy_val_oracle = on_policy_estimate(
                 pi_e_data_discounted=pi_e_data_discounted)
@@ -142,11 +142,11 @@ class QLogger(AbstractQLogger):
 
             if self.tensorboard:
                 self.writer.add_scalar(
-                    'benchmark_Q_RMSE_'+which, q_rmse, epoch)
+                    '[Benchmark] Q_RMSE_'+which, q_rmse, epoch)
 
                 self.writer.add_scalar(
-                    'benchmark_mean_Q_eq_'+which, mean_eq, epoch)
-                self.writer.add_scalar('benchmark_uniform_Q_gmm_norm_'+which,
+                    '[Benchmark] Mean_Q_eq_'+which, mean_eq, epoch)
+                self.writer.add_scalar('[Benchmark] Uniform_Q_GMM_norm_'+which,
                                        (mean_eq ** 2) / mean_eq_squared, epoch)
 
         # q_of_s_a_sample = torch.gather(q(self.s_sample), dim=1,
@@ -169,7 +169,7 @@ class QLogger(AbstractQLogger):
 
         if self.tensorboard:
             self.writer.add_scalar(
-                'benchmark_Q_policy_sqrerr_log', np.log(square_error), epoch)
+                '[Benchmark] Q_policy_sqrerr', square_error, epoch)
 
         if self.save_model:
             self.save_q(square_error, q, epoch, suffix='ERM')
@@ -212,11 +212,11 @@ class QLogger(AbstractQLogger):
 
             if self.tensorboard:
                 self.writer.add_scalar(
-                    'benchmark_Q_RMSE_'+which, q_rmse, epoch)
+                    'Q_RMSE_'+which, q_rmse, epoch)
 
                 self.writer.add_scalar(
-                    'benchmark_mean_Q_eq_'+which, mean_eq, epoch)
-                self.writer.add_scalar('benchmark_uniform_Q_gmm_norm_'+which,
+                    'Mean_Q_eq_'+which, mean_eq, epoch)
+                self.writer.add_scalar('Uniform_Q_gmm_norm_'+which,
                                        (mean_eq ** 2) / mean_eq_squared, epoch)
 
         # estimate policy value
@@ -229,7 +229,7 @@ class QLogger(AbstractQLogger):
 
         if self.tensorboard:
             self.writer.add_scalar(
-                'policy_Q_sqrerr_log', np.log(square_error), epoch)
+                'Policy_Q_sqrerr', square_error, epoch)
         if self.save_model:
             self.save_q(square_error, q, epoch)
         print("")
@@ -275,7 +275,7 @@ class SimplestQLogger(AbstractQLogger):
 
         if self.tensorboard:
             self.writer.add_scalar(
-                'benchmark_Q_policy_sqrerr', square_error, epoch)
+                '[Benchmark] Q_policy_sqrerr', square_error, epoch)
 
         if self.save_model:
             self.save_q(square_error, q, epoch, suffix='ERM')
@@ -291,6 +291,6 @@ class SimplestQLogger(AbstractQLogger):
         print("Policy value estimate squared error:", square_error)
 
         if self.tensorboard:
-            self.writer.add_scalar('policy_Q_sqrerr', square_error, epoch)
+            self.writer.add_scalar('Policy_Q_sqrerr', square_error, epoch)
         if self.save_model:
             self.save_q(square_error, q, epoch)

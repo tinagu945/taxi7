@@ -17,7 +17,7 @@ from benchmark_methods.erm_q_benchmark import train_q_network_erm
 
 def train_q_network(train_data, pi_e, num_epochs, batch_size, q,
                     f, q_optimizer, f_optimizer, gamma, val_data=None,
-                    val_freq=10, logger=None):
+                    val_freq=10, logger=None, q_scheduler=None, f_scheduler=None):
     """
     :param train_data: dataset logged from behavior policy used for training
         (should be instance of TauListDataset)
@@ -60,6 +60,11 @@ def train_q_network(train_data, pi_e, num_epochs, batch_size, q,
             q_optimizer.zero_grad()
             q_obj.backward()
             q_optimizer.step()
+
+        if q_scheduler:
+            q_scheduler.step()
+        if f_scheduler:
+            f_scheduler.step()
 
 
 def train_q_taxi(env, train_data, val_data, pi_e, pi_b, init_state_sampler, logger, gamma, ERM_epoch=100, epoch=120, q_pretrain_lr=1e-1, q_lr=1e-3):

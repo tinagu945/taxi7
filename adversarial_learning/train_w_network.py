@@ -22,7 +22,7 @@ from utils.torch_utils import load_tensor_from_npy
 
 def train_w_network(train_data, pi_e, pi_b, num_epochs, batch_size, w, f,
                     w_optimizer, f_optimizer, gamma, init_state_sampler,
-                    val_data=None, val_freq=10, logger=None):
+                    val_data=None, val_freq=10, logger=None, w_scheduler=None, f_scheduler=None):
     """
     :param train_data: dataset logged from behavior policy used for training
         (should be instance of TauListDataset)
@@ -56,6 +56,10 @@ def train_w_network(train_data, pi_e, pi_b, num_epochs, batch_size, w, f,
         val_data_loader = None
 
     for epoch in range(num_epochs):
+        if logger and epoch % val_freq == 0:
+            logger.log(train_data_loader, val_data_loader, w, f,
+                       init_state_sampler, epoch)
+
         for s, a, s_prime, r in train_data_loader:
             s_0 = init_state_sampler.get_sample(batch_size)
             w_obj, f_obj = w_game_objective(w=w, f=f, s=s, a=a, s_prime=s_prime,
@@ -70,9 +74,10 @@ def train_w_network(train_data, pi_e, pi_b, num_epochs, batch_size, w, f,
             w_obj.backward()
             w_optimizer.step()
 
-        if logger and epoch % val_freq == 0:
-            logger.log(train_data_loader, val_data_loader, w, f,
-                       init_state_sampler, epoch)
+        if w_scheduler:
+            w_scheduler.step()
+        if f_scheduler:
+            f_scheduler.step()
 
 
 def train_w_taxi(env, train_data, val_data, pi_e, pi_b, init_state_sampler, logger, gamma, ERM_epoch=50, epoch=10000, w_lr_pre=1e-3,  w_lr=1e-4):
