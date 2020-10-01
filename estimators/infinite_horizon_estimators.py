@@ -65,8 +65,10 @@ def oracle_w_estimator(tau_list_data_loader, pi_e, pi_b, w_oracle):
     for s, a, _, r in tau_list_data_loader:
         pi_ratio = pi_e(s) / pi_b(s)
         eta_s_a = torch.gather(pi_ratio, dim=1, index=a.view(-1, 1)).view(-1)
-        b_prob = w_oracle(s).softmax(-1)[:, -1]
-        w_true = (1-b_prob)/b_prob
+        b_prob = w_oracle(s).softmax(-1)[:, 0]
+        w_true = (1 - b_prob) / (b_prob + 1e-7)
+        w_true = w_true / w_true.mean()
+        # print(w_true.mean())
         weighted_reward = float((r * w_true.view(-1) * eta_s_a).sum())
         weighted_reward_total += weighted_reward
         weighted_reward_norm += len(s)

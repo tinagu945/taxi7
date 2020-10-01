@@ -26,17 +26,17 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--gamma', type=float, default=0.98)
 parser.add_argument('--alpha', type=float, default=0.6)
 parser.add_argument('--temp', type=float, default=2.0)
-parser.add_argument('--w_pre_lr', type=float, default=1e-4)
-parser.add_argument('--w_lr', type=float, default=1e-6)
-parser.add_argument('--f_lr_multiple', type=float, default=500)
+parser.add_argument('--w_pre_lr', type=float, default=1e-3)
+parser.add_argument('--w_lr', type=float, default=1e-4)
+parser.add_argument('--f_lr_multiple', type=float, default=1)
 parser.add_argument('--hidden_dim', type=int, default=50)
 parser.add_argument('--lr_decay', type=int, default=np.inf)
 parser.add_argument('--num_tau', type=int, default=1)
 parser.add_argument('--oracle_tau_len', type=int, default=1000000)
 parser.add_argument('--tau_len', type=int, default=200000)
 parser.add_argument('--burn_in', type=int, default=100000)
-parser.add_argument('--ERM_epoch', type=int, default=400)
-parser.add_argument('--GMM_epoch', type=int, default=2000)
+parser.add_argument('--ERM_epoch', type=int, default=200)
+parser.add_argument('--GMM_epoch', type=int, default=500)
 parser.add_argument('--val_freq', type=int, default=10)
 parser.add_argument('--batch_size', type=int, default=1024)
 parser.add_argument('--load_train', action='store_false', default=True)
@@ -77,7 +77,8 @@ def debug():
             args.tau_b_path, prefix=args.pi_other_name+'_val_')
         test_data = TauListDataset.load(
             args.tau_b_path, prefix=args.pi_other_name+'_test_')
-        pi_e_data_discounted = TauListDataset.load(args.tau_e_path)
+        pi_e_data_discounted = TauListDataset.load(args.tau_e_path,
+                                                   prefix="gamma_")
     else:
         # generate train, val, and test data, very slow so load exisiting data is preferred.
         # pi_b data is for training so no gamma.
@@ -108,9 +109,9 @@ def debug():
         print(args, file=f)
 
     # define networks and optimizers
-    w = WNetworkModel(env.state_dim, args.hidden_dim)
+    w = WNetworkModel(env.state_dim, args.hidden_dim, positive_output=True)
     f = WAdversaryWrapper(WNetworkModel(env.state_dim, args.hidden_dim))
-    w_optimizer_pre = Adam(w.parameters(), lr=args.w_pre_lr, betas=(0.5, 0.9))
+    w_optimizer_pre = Adam(w.parameters(), lr=args.w_pre_lr)
     w_optimizer = OAdam(w.parameters(), lr=args.w_lr, betas=(0.5, 0.9))
     f_optimizer = OAdam(f.parameters(), lr=args.w_lr *
                         args.f_lr_multiple, betas=(0.5, 0.9))

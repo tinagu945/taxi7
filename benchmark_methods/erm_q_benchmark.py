@@ -5,7 +5,8 @@ from dataset.tau_list_dataset import TauListDataset
 
 def train_q_network_erm(train_data, pi_e, num_epochs,
                         batch_size, q, q_optimizer, gamma,
-                        val_data=None, val_freq=10, logger=None):
+                        val_data=None, val_freq=10, logger=None,
+                        q_scheduler=None):
     """
     :param train_data: list of trajectories logged from behavior policy
         to use for training
@@ -39,6 +40,9 @@ def train_q_network_erm(train_data, pi_e, num_epochs,
             q_optimizer.zero_grad()
             obj.backward()
             q_optimizer.step()
+
+            if q_scheduler:
+                q_scheduler.step()
 
         if logger and epoch % val_freq == 0:
             logger.log_benchmark(train_data_loader, val_data_loader, q, epoch)

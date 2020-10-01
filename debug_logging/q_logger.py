@@ -83,6 +83,9 @@ class QLogger(AbstractQLogger):
         # self.a_sample = pi_e_data.a[sample_idx[:5]]
         # self.s_prime_sample = pi_e_data.s_prime[sample_idx[:5]]
         # self.r_sample = pi_e_data.r[sample_idx[:5]]
+        sample_idx = list(range(len(pi_e_data_discounted.s)))
+        random.shuffle(sample_idx)
+        self.s_sample = pi_e_data_discounted.s[sample_idx[:5]]
         if policy_val_oracle:
             self.policy_val_oracle = policy_val_oracle
         else:
@@ -104,8 +107,10 @@ class QLogger(AbstractQLogger):
     def log_benchmark(self, train_data_loader, val_data_loader, q, epoch):
         print("[log_benchmark] Validation results for benchmark epoch %d" % epoch)
         # print Q function on the fixed sample
-        # print("[log_benchmark] Q function sample values:")
-        # print(q(self.s_sample).detach())
+        print("[log_benchmark] Q function sample values:")
+        print(q(self.s_sample).detach())
+        print("[log_benchmark] Oracle Q function sample values:")
+        print(self.q_oracle(self.s_sample).detach())
 
         for which, data_loader in (("Train", train_data_loader),
                                    ("Val", val_data_loader)):
@@ -136,9 +141,9 @@ class QLogger(AbstractQLogger):
 
             mean_eq = eq_total / eq_norm
             mean_eq_squared = eq_squared_total / eq_norm
-            print("[log_benchmark] Mean eq:", mean_eq)
-            print("[log_benchmark] Uniform gmm norm:",
-                  (mean_eq ** 2) / mean_eq_squared)
+            # print("[log_benchmark] Mean eq:", mean_eq)
+            # print("[log_benchmark] Uniform gmm norm:",
+            #       (mean_eq ** 2) / mean_eq_squared)
 
             if self.tensorboard:
                 self.writer.add_scalar(
@@ -164,6 +169,7 @@ class QLogger(AbstractQLogger):
             init_state_sampler=self.init_state_sampler)
         square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
         print('[log_benchmark] Policy_val_oracle', self.policy_val_oracle)
+        print('[log_benchmark] Policy_val_predicted', policy_val_estimate)
         print("[log_benchmark] Policy value estimate squared error:", square_error)
         print("")
 
@@ -176,6 +182,10 @@ class QLogger(AbstractQLogger):
 
     def log(self, train_data_loader, val_data_loader, q, f, epoch):
         print("Validation results for epoch %d" % epoch)
+        print("Q function sample values:")
+        print(q(self.s_sample).detach())
+        print("Oracle Q function sample values:")
+        print(self.q_oracle(self.s_sample).detach())
 
         for which, data_loader in (("Train", train_data_loader),
                                    ("Val", val_data_loader)):
@@ -186,6 +196,9 @@ class QLogger(AbstractQLogger):
             eq_total = 0.0
             eq_squared_total = 0.0
             eq_norm = 0.0
+
+            obj_total = 0.0
+            obj_norm = 0.0
 
             for s, a, s_prime, r in data_loader:
                 q_pred = q(s)
@@ -201,14 +214,21 @@ class QLogger(AbstractQLogger):
                 eq_squared_total += float((eq ** 2).sum())
                 eq_norm += len(s)
 
+                obj, _ = q_game_objective(q, f, s, a, s_prime, r,
+                                          self.pi_e, self.gamma)
+                obj_total += float(obj) * len(s)
+                obj_norm += len(s)
+
+            print("%s Game Objective: %f" % (which, obj_total / obj_norm))
+
             q_rmse = float((q_err_total / q_err_norm) ** 0.5)
             print("%s Q function RMSE: %f" % (which, q_rmse))
 
             mean_eq = eq_total / eq_norm
             mean_eq_squared = eq_squared_total / eq_norm
-            print("Mean eq:", mean_eq)
-            print("Uniform gmm norm:",
-                  (mean_eq ** 2) / mean_eq_squared)
+            # print("Mean eq:", mean_eq)
+            # print("Uniform gmm norm:",
+            #       (mean_eq ** 2) / mean_eq_squared)
 
             if self.tensorboard:
                 self.writer.add_scalar(
@@ -225,6 +245,7 @@ class QLogger(AbstractQLogger):
             init_state_sampler=self.init_state_sampler)
         square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
         print('Policy_val_oracle', self.policy_val_oracle)
+        print('Policy_val_predicted', policy_val_estimate)
         print("Policy val ue estimate squared error:", square_error)
 
         if self.tensorboard:

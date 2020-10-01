@@ -313,12 +313,14 @@ class ContinuousWLogger(SimplePrintWLogger):
 
 
 class SimplestWLogger(AbstractWLogger):
-    def __init__(self, env, pi_e, pi_b, gamma, save_model, tensorboard, log_path, oracle_policy_value):
+    def __init__(self, env, pi_e, pi_b, gamma, save_model, tensorboard,
+                 log_path, oracle_policy_value, batch_size=1024):
         AbstractWLogger.__init__(
             self, env, pi_e, pi_b, gamma, save_model, log_path=log_path)
         self.tensorboard = tensorboard
         self.policy_val_oracle = oracle_policy_value
         self.writer = SummaryWriter(self.path)
+        self.batch_size = batch_size
 
     def log_benchmark(self, train_data_loader, val_data_loader, w, epoch):
         print('[log_benchmark] epoch', epoch)
@@ -328,6 +330,7 @@ class SimplestWLogger(AbstractWLogger):
             pi_b=self.pi_b, w=w)
         square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
         print('[log_benchmark] Policy_val_oracle', self.policy_val_oracle)
+        print('[log_benchmark] Policy_val_estimate', policy_val_estimate)
         print("[log_benchmark] Policy value estimate squared error:", square_error)
         print("")
 
@@ -341,16 +344,34 @@ class SimplestWLogger(AbstractWLogger):
     def log(self, train_data_loader, val_data_loader, w, f, init_state_sampler,
             epoch):
         print('epoch', epoch)
+
+        for which, data_loader in (("Train", train_data_loader),
+                                   ("Val", val_data_loader)):
+            obj_total = 0.0
+            obj_norm = 0.0
+
+            for s, a, s_prime, r in data_loader:
+                s_0 = init_state_sampler.get_sample(self.batch_size)
+                obj, _ = w_game_objective(w, f, s, a, s_prime, self.pi_e,
+                                          self.pi_b, s_0, self.gamma)
+                obj_total += float(obj) * len(s)
+                obj_norm += len(s)
+
+            print("%s Game Objective: %f" % (which, obj_total / obj_norm))
+
         # estimate policy value
         policy_val_estimate = w_estimator(
             tau_list_data_loader=train_data_loader, pi_e=self.pi_e,
             pi_b=self.pi_b, w=w)
         square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
         print('Policy_val_oracle', self.policy_val_oracle)
+        print('Policy_val_estimate', policy_val_estimate)
         print("Policy value estimate squared error:", square_error)
 
         if self.tensorboard:
             self.writer.add_scalar('policy_W_sqrerr', square_error, epoch)
         if self.save_model:
             self.save_w(square_error, w, epoch)
+
+
         print("")
