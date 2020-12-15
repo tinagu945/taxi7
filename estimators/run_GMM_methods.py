@@ -78,6 +78,9 @@ def debug():
             q = train_q_taxi(env, train_data, val_data, pi_e, pi_b,
                              init_state_sampler, q_logger, gamma, ERM_epoch=args.q_ERM_epoch, epoch=args.q_epoch)
             q_est = q_estimator(pi_e, gamma, q, init_state_sampler)
+            # SASR = train_data.restore_strcture(discrete=False)
+            # dataloader doesn't preserve trajectory structure, but SASR does.
+            # drl1 = double_importance_sampling_estimator(SASR, pi_b, pi_e, args.gamma, q, split_shape=[4, 1, 4, 1])
             print('[ours] q_est', q_est)
             with open(os.path.join(q_path, 'results.txt'), 'w') as f:
                 f.write(str(q_est))

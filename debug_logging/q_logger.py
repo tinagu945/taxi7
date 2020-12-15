@@ -7,6 +7,7 @@ from estimators.benchmark_estimators import on_policy_estimate
 from estimators.infinite_horizon_estimators import q_estimator
 from models.continuous_models import QOracleModel
 from dataset.tau_list_dataset import TauListDataset
+from benchmark_methods.erm_q_benchmark import q_ERM_loss
 import datetime
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
@@ -199,6 +200,7 @@ class QLogger(AbstractQLogger):
 
             obj_total = 0.0
             obj_norm = 0.0
+            erm_reg_total = 0.0
 
             for s, a, s_prime, r in data_loader:
                 q_pred = q(s)
@@ -216,10 +218,15 @@ class QLogger(AbstractQLogger):
 
                 obj, _ = q_game_objective(q, f, s, a, s_prime, r,
                                           self.pi_e, self.gamma)
+                erm_reg = q_ERM_loss(q, self.pi_e, s, a,
+                                     s_prime, r, self.gamma)
+
                 obj_total += float(obj) * len(s)
+                erm_reg_total += float(erm_reg)*len(s)
                 obj_norm += len(s)
 
             print("%s Game Objective: %f" % (which, obj_total / obj_norm))
+            print("%s ERM reg: %f" % (which, erm_reg_total / obj_norm))
 
             q_rmse = float((q_err_total / q_err_norm) ** 0.5)
             print("%s Q function RMSE: %f" % (which, q_rmse))
@@ -238,6 +245,8 @@ class QLogger(AbstractQLogger):
                     'Mean_Q_eq_'+which, mean_eq, epoch)
                 self.writer.add_scalar('Uniform_Q_gmm_norm_'+which,
                                        (mean_eq ** 2) / mean_eq_squared, epoch)
+                self.writer.add_scalar('Q_obj_'+which,
+                                       obj_total / obj_norm, epoch)
 
         # estimate policy value
         policy_val_estimate = q_estimator(
@@ -291,6 +300,7 @@ class SimplestQLogger(AbstractQLogger):
             pi_e=self.pi_e, gamma=self.gamma, q=q,
             init_state_sampler=self.init_state_sampler)
         square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
+        print('[log_benchmark] Estimate', policy_val_estimate)
         print('[log_benchmark] Policy_val_oracle', self.policy_val_oracle)
         print("[log_benchmark] Policy value estimate squared error:", square_error)
 
@@ -308,6 +318,7 @@ class SimplestQLogger(AbstractQLogger):
             pi_e=self.pi_e, gamma=self.gamma, q=q,
             init_state_sampler=self.init_state_sampler)
         square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
+        print('Estimate', policy_val_estimate)
         print('Policy_val_oracle', self.policy_val_oracle)
         print("Policy value estimate squared error:", square_error)
 

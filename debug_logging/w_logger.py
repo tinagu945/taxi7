@@ -284,31 +284,34 @@ class ContinuousWLogger(SimplePrintWLogger):
 
         for which, data_loader in (("Train", train_data_loader),
                                    ("Val", val_data_loader)):
-            # calculate error in W
-            w_err_total = 0.0
-            w_err_norm = 0.0
-            for s, a, s_prime, _ in data_loader:
-                w_pred = w(s).view(-1)
-                b_prob = self.w_oracle(s).softmax(-1)[:, -1]
-                w_true = (1-b_prob)/b_prob
-                w_err_total += ((w_pred - w_true) ** 2).sum()
-                w_err_norm += len(s)
-            w_rmse = float((w_err_total / w_err_norm) ** 0.5)
-            print("%s W RMSE: %f" % (which, w_rmse))
+            if data_loader:
+                # calculate error in W
+                w_err_total = 0.0
+                w_err_norm = 0.0
+                for s, a, s_prime, _ in data_loader:
+                    w_pred = w(s).view(-1)
+                    b_prob = self.w_oracle(s).softmax(-1)[:, -1]
+                    w_true = (1-b_prob)/b_prob
+                    w_err_total += ((w_pred - w_true) ** 2).sum()
+                    w_err_norm += len(s)
+                w_rmse = float((w_err_total / w_err_norm) ** 0.5)
+                print("%s W RMSE: %f" % (which, w_rmse))
 
-            # estimate policy value
-            policy_val_estimate = w_estimator(
-                tau_list_data_loader=data_loader, pi_e=self.pi_e,
-                pi_b=self.pi_b, w=w)
-            square_error = (policy_val_estimate - self.policy_val_oracle) ** 2
-            print("%s policy value %f estimate squared error: %f"
-                  % (which, policy_val_estimate, square_error))
+                # estimate policy value
+                policy_val_estimate = w_estimator(
+                    tau_list_data_loader=data_loader, pi_e=self.pi_e,
+                    pi_b=self.pi_b, w=w)
+                square_error = (policy_val_estimate -
+                                self.policy_val_oracle) ** 2
+                print("%s policy value %f estimate squared error: %f"
+                      % (which, policy_val_estimate, square_error))
 
-            if self.tensorboard:
-                self.writer.add_scalar(
-                    'benchmark_W_RMSE_'+which, w_rmse, epoch)
-                self.writer.add_scalar(
-                    'benchmark_policy_sqrterr_'+which, square_error, epoch)
+                if self.tensorboard:
+                    self.writer.add_scalar(
+                        'benchmark_W_RMSE_'+which, w_rmse, epoch)
+                    self.writer.add_scalar(
+                        'benchmark_policy_sqrterr_'+which, square_error, epoch)
+
         print("")
 
 
@@ -349,15 +352,15 @@ class SimplestWLogger(AbstractWLogger):
                                    ("Val", val_data_loader)):
             obj_total = 0.0
             obj_norm = 0.0
+            if data_loader:
+                for s, a, s_prime, r in data_loader:
+                    s_0 = init_state_sampler.get_sample(self.batch_size)
+                    obj, _ = w_game_objective(w, f, s, a, s_prime, self.pi_e,
+                                              self.pi_b, s_0, self.gamma)
+                    obj_total += float(obj) * len(s)
+                    obj_norm += len(s)
 
-            for s, a, s_prime, r in data_loader:
-                s_0 = init_state_sampler.get_sample(self.batch_size)
-                obj, _ = w_game_objective(w, f, s, a, s_prime, self.pi_e,
-                                          self.pi_b, s_0, self.gamma)
-                obj_total += float(obj) * len(s)
-                obj_norm += len(s)
-
-            print("%s Game Objective: %f" % (which, obj_total / obj_norm))
+                print("%s Game Objective: %f" % (which, obj_total / obj_norm))
 
         # estimate policy value
         policy_val_estimate = w_estimator(
@@ -372,6 +375,5 @@ class SimplestWLogger(AbstractWLogger):
             self.writer.add_scalar('policy_W_sqrerr', square_error, epoch)
         if self.save_model:
             self.save_w(square_error, w, epoch)
-
 
         print("")

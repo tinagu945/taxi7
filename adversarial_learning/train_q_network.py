@@ -12,11 +12,11 @@ from policies.mixture_policies import MixtureDiscretePolicy
 from policies.taxi_policies import load_taxi_policy
 from utils.torch_utils import load_tensor_from_npy
 from debug_logging.q_logger import DiscreteQLogger
-from benchmark_methods.erm_q_benchmark import train_q_network_erm
+from benchmark_methods.erm_q_benchmark import train_q_network_erm, q_ERM_loss
 
 
 def train_q_network(train_data, pi_e, num_epochs, batch_size, q,
-                    f, q_optimizer, f_optimizer, gamma, val_data=None,
+                    f, q_optimizer, f_optimizer, gamma, c_reg, val_data=None,
                     val_freq=10, logger=None, q_scheduler=None, f_scheduler=None):
     """
     :param train_data: dataset logged from behavior policy used for training
@@ -52,6 +52,9 @@ def train_q_network(train_data, pi_e, num_epochs, batch_size, q,
         for s, a, s_prime, r in train_data_loader:
             q_obj, f_obj = q_game_objective(
                 q, f, s, a, s_prime, r, pi_e, gamma)
+
+            erm_reg = q_ERM_loss(q, pi_e, s, a, s_prime, r, gamma)
+            q_obj += c_reg*erm_reg
 
             f_optimizer.zero_grad()
             f_obj.backward(retain_graph=True)

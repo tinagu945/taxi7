@@ -1,6 +1,12 @@
 import torch
-
 from dataset.tau_list_dataset import TauListDataset
+
+
+def q_ERM_loss(q, pi_e, s, a, s_prime, r, gamma):
+    q_of_s_a = torch.gather(q(s), dim=1, index=a.view(-1, 1)).view(-1)
+    v_of_ss = (pi_e(s_prime) * q(s_prime)).sum(1).detach()
+    obj = ((q_of_s_a - r - gamma * v_of_ss) ** 2).mean()
+    return obj
 
 
 def train_q_network_erm(train_data, pi_e, num_epochs,
@@ -33,9 +39,7 @@ def train_q_network_erm(train_data, pi_e, num_epochs,
     for epoch in range(num_epochs):
         for s, a, s_prime, r in train_data_loader:
             # calculate classical q learning objective
-            q_of_s_a = torch.gather(q(s), dim=1, index=a.view(-1, 1)).view(-1)
-            v_of_ss = (pi_e(s_prime) * q(s_prime)).sum(1).detach()
-            obj = ((q_of_s_a - r - gamma * v_of_ss) ** 2).mean()
+            obj = q_ERM_loss(q, pi_e, s, a, s_prime, r, gamma)
 
             q_optimizer.zero_grad()
             obj.backward()

@@ -38,7 +38,7 @@ def on_policy_estimate(env=None, pi_e=None, gamma=None, num_tau=None, tau_len=No
     return float(r.mean())
 
 
-def importance_sampling_estimator(SASR, pi_b, pi_e, gamma):
+def importance_sampling_estimator(SASR, pi_b, pi_e, gamma, split_shape=[1, 1, 1, 1]):
     mean_est_reward = 0.0
     for sasr in SASR:
         log_trajectory_ratio = 0.0
@@ -46,9 +46,10 @@ def importance_sampling_estimator(SASR, pi_b, pi_e, gamma):
         discounted_t = 1.0
         self_normalizer = 0.0
 
-        for s, a, sprime, r in sasr:
-            log_trajectory_ratio += np.log(pi_e(s)[0][a]) - \
-                np.log(pi_b(s)[0][a])
+        for seq in sasr:
+            s, a, sprime, r = torch.split(seq, split_shape)
+            log_trajectory_ratio += np.log(torch.squeeze(pi_e(s))[int(a)]) - \
+                np.log(torch.squeeze(pi_b(s))[int(a)])
             total_reward += r * discounted_t
             self_normalizer += discounted_t
             discounted_t *= gamma
@@ -58,16 +59,17 @@ def importance_sampling_estimator(SASR, pi_b, pi_e, gamma):
     return mean_est_reward
 
 
-def importance_sampling_estimator_stepwise(SASR, pi_b, pi_e, gamma):
+def importance_sampling_estimator_stepwise(SASR, pi_b, pi_e, gamma, split_shape=[1, 1, 1, 1]):
     mean_est_reward = 0.0
     for sasr in SASR:
         step_log_pr = 0.0
         est_reward = 0.0
         discounted_t = 1.0
         self_normalizer = 0.0
-        for s, a, sprime, r in sasr:
-            step_log_pr += np.log(pi_e(s)[0][a]) - \
-                np.log(pi_b(s)[0][a])
+        for seq in sasr:
+            s, a, sprime, r = torch.split(seq, split_shape)
+            step_log_pr += np.log(torch.squeeze(pi_e(s))[int(a)]) - \
+                np.log(torch.squeeze(pi_b(s))[int(a)])
             est_reward += np.exp(step_log_pr)*r*discounted_t
             self_normalizer += discounted_t
             discounted_t *= gamma

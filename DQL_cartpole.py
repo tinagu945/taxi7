@@ -10,7 +10,7 @@ from environments.cartpole_environment import CartpoleEnvironment
 import math
 import torchvision.transforms as T
 import numpy as np
-
+import os
 import time
 
 
@@ -42,13 +42,13 @@ class DQN():
             return self.model(torch.Tensor(state))
 
 
-def q_learning(env, model, episodes, gamma=0.9,
+def q_learning(env, model, episodes, path, gamma=0.98,
                epsilon=0.3, eps_decay=0.99,
                replay=False, replay_size=20,
                title='DQL', double=False,
                n_update=10, soft=False, verbose=True):
     """Deep Q Learning algorithm using the DQN. """
-    best = 0
+    best = -np.inf
     final = []
     memory = []
     episode_i = 0
@@ -116,12 +116,18 @@ def q_learning(env, model, episodes, gamma=0.9,
 
         if total >= best:
             best = total
+            for f in os.listdir(path):
+                if 'best' in f:
+                    os.remove(path+f)
+
             torch.save(model.model.state_dict(),
-                       'cartpole_weights/cartpole_best.pt')
+                       path +
+                       str(episode)+'_'+str(int(total))+'_cartpole_best.pt')
+            print('saved best')
         print('best at epoch ', np.argmax(final), final[np.argmax(final)])
         if episode % 10 == 0:
-            torch.save(model.model.state_dict(), 'cartpole_weights/cartpole_' +
-                       str(episode)+'_'+str(total)+'.pt')
+            torch.save(model.model.state_dict(), path +
+                       str(episode)+'_'+str(int(total))+'_cartpole.pt')
 
     return final
 
@@ -130,31 +136,31 @@ def q_learning(env, model, episodes, gamma=0.9,
 class DQN_replay(DQN):
     # old replay function
     # def replay(self, memory, size, gamma=0.9):
-    #""" Add experience replay to the DQN network class. """
+    # """ Add experience replay to the DQN network class. """
     # Make sure the memory is big enough
     # if len(memory) >= size:
-    #states = []
-    #targets = []
+    # states = []
+    # targets = []
     # Sample a batch of experiences from the agent's memory
-    #batch = random.sample(memory, size)
+    # batch = random.sample(memory, size)
 
     # Extract information from the data
     # for state, action, next_state, reward, done in batch:
     # states.append(state)
     # Predict q_values
-    #q_values = self.predict(state).tolist()
+    # q_values = self.predict(state).tolist()
     # if done:
-    #q_values[action] = reward
+    # q_values[action] = reward
     # else:
-    #q_values_next = self.predict(next_state)
-    #q_values[action] = reward + gamma * torch.max(q_values_next).item()
+    # q_values_next = self.predict(next_state)
+    # q_values[action] = reward + gamma * torch.max(q_values_next).item()
 
     # targets.append(q_values)
 
-    #self.update(states, targets)
+    # self.update(states, targets)
 
     # new replay function
-    def replay(self, memory, size, gamma=0.9):
+    def replay(self, memory, size, gamma):
         """New replay function"""
         # Try to improve replay speed
         if len(memory) >= size:
@@ -187,7 +193,7 @@ class DQN_replay(DQN):
             self.update(states.tolist(), all_q_values.tolist())
 
 
-env = CartpoleEnvironment()
+env = CartpoleEnvironment(reward_reshape=False)
 # Number of states, 4
 n_state = env.state_dim
 # Number of actions, 2
@@ -201,6 +207,6 @@ lr = 1e-3
 # Get replay results
 dqn_replay = DQN_replay(n_state, n_action, n_hidden, lr)
 replay = q_learning(env, dqn_replay,
-                    episodes, gamma=.9,
+                    episodes, 'cartpole_weights_1/', gamma=.98,
                     epsilon=0.2, replay=True,
                     title='DQL with Replay')

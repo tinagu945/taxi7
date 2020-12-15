@@ -25,6 +25,7 @@ class DiscreteInitStateSampler(AbstractInitStateSampler):
     Implementation for discrete scenarios where we know the initial state
     probabilities
     """
+
     def __init__(self, init_state_dist):
         """
         :param init_state_dist: FloatTensor of shape (num_s,), where num_s
@@ -53,6 +54,7 @@ class DecodingDiscreteInitStateSampler(DiscreteInitStateSampler):
     This class is for environments where states are continuous but have
     a discrete encoding (such as with Taxi environment with continuous states)
     """
+
     def __init__(self, init_state_dist, decoder):
         """
         :param init_state_dist: FloatTensor of shape (num_s,), where num_s
@@ -79,6 +81,7 @@ class GenericInitStateSampler(AbstractInitStateSampler):
     given function
 
     """
+
     def __init__(self, sampler, expectation_sample_size):
         AbstractInitStateSampler.__init__(self)
         self.sampler = sampler
@@ -97,14 +100,16 @@ class CartpoleInitStateSampler(GenericInitStateSampler):
     Implementation for cartpole
 
     """
+
     def __init__(self, env, expectation_sample_size=100000):
         assert isinstance(env, CartpoleEnvironment)
         self.low = -0.05
-        self.high= 0.05
-        sampler = lambda b_: torch.Tensor(env.gym_env.np_random.uniform(
+        self.high = 0.05
+        # import pdb
+        # pdb.set_trace()
+
+        def sampler(b_): return torch.Tensor(env.gym_env.np_random.uniform(
             low=self.low, high=self.high, size=(b_, env.state_dim)))
         GenericInitStateSampler.__init__(
             self, sampler=sampler,
             expectation_sample_size=expectation_sample_size)
-
-

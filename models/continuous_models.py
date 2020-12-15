@@ -41,6 +41,14 @@ class StateClassifierModel(nn.Module):
             torch.nn.LeakyReLU(),
             torch.nn.Linear(hidden_dim, hidden_dim*2),
             torch.nn.LeakyReLU(),
+            torch.nn.Linear(hidden_dim*2, hidden_dim*4),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(hidden_dim*2, hidden_dim*4),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(hidden_dim*8, hidden_dim*16),
+            torch.nn.LeakyReLU(),
+            torch.nn.Linear(hidden_dim*16, hidden_dim*2),
+            torch.nn.LeakyReLU(),
             torch.nn.Linear(hidden_dim*2, out_dim),
         )
 
@@ -123,7 +131,6 @@ class QNetworkModelSimple(nn.Module):
         )
         self.neg_output = neg_output
 
-
     def forward(self, s):
         if self.neg_output:
             return -torch.abs(self.model(s))
@@ -138,7 +145,6 @@ class QNetworkModelSimple(nn.Module):
         if cuda:
             q.model = q.model.cuda()
         return q
-
 
 
 class QOracleModel(nn.Module):

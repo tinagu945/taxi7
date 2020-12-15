@@ -57,7 +57,6 @@ class TauListDataset(Dataset):
             intervals.append(intervals[-1]+int(i))
         SASR = []
         for i in range(1, len(intervals)):
-
             discounted_t = 1.0
             if len(self.s.size()) == 2:
                 a = self.a.unsqueeze(-1)
